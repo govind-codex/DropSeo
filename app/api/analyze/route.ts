@@ -114,7 +114,6 @@ async function getAiAnalysis(input: {
             effort: { type: "string", enum: ["Quick", "Moderate", "Project"] },
           },
           required: ["title", "why", "action", "impact", "effort"],
-          additionalProperties: false,
         },
       },
       searchUpgrade: {
@@ -127,7 +126,6 @@ async function getAiAnalysis(input: {
           schemaSuggestion: { type: "string" },
         },
         required: ["title", "metaDescription", "keywordThemes", "contentGap", "schemaSuggestion"],
-        additionalProperties: false,
       },
       performanceStory: {
         type: "object",
@@ -137,7 +135,6 @@ async function getAiAnalysis(input: {
           nextTest: { type: "string" },
         },
         required: ["diagnosis", "likelyBottlenecks", "nextTest"],
-        additionalProperties: false,
       },
       growthExperiment: {
         type: "object",
@@ -148,12 +145,10 @@ async function getAiAnalysis(input: {
           successMetric: { type: "string" },
         },
         required: ["name", "hypothesis", "steps", "successMetric"],
-        additionalProperties: false,
       },
       confidence: { type: "string", enum: ["High", "Medium", "Low"] },
     },
     required: ["summary", "verdict", "quickWins", "searchUpgrade", "performanceStory", "growthExperiment", "confidence"],
-    additionalProperties: false,
   };
 
   const prompt = `You are Sitepulse's senior technical SEO and web performance strategist.
@@ -164,7 +159,7 @@ Make the advice unusually specific and creative, but practical. Rank quick wins 
 AUDIT EVIDENCE:
 ${JSON.stringify(input)}`;
 
-  const model = env.GEMINI_MODEL || process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const model = env.GEMINI_MODEL || process.env.GEMINI_MODEL || "gemini-3.6-flash";
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
     {
@@ -175,7 +170,7 @@ ${JSON.stringify(input)}`;
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         generationConfig: {
           temperature: 0.65,
-          maxOutputTokens: 2400,
+          maxOutputTokens: 5000,
           responseMimeType: "application/json",
           responseSchema: schema,
         },
