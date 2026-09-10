@@ -1,13 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["@sparticuz/chromium-min", "playwright-core"],
-  outputFileTracingIncludes: {
-    "/api/agent/run": ["./agent/worker.mjs", "./node_modules/@sparticuz/chromium-min/**/*", "./node_modules/playwright-core/**/*"],
-  },
-  outputFileTracingExcludes: {
-    "/api/agent/run": ["./outputs/**/*", "./dist/**/*", "./.wrangler/**/*", "./.sites-runtime/**/*"],
-  },
+  /* Vercel uses the lightweight serverless analysis route. Playwright remains
+     available to the optional standalone worker and is not bundled here. */
 };
 
 export default nextConfig;
