@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Activity,
@@ -91,7 +91,12 @@ export default function Home() {
   const [snapshotUrl, setSnapshotUrl] = useState("");
   const [findings, setFindings] = useState<Finding[]>([]);
   const [result, setResult] = useState<Result | null>(null);
-  const [recentRuns, setRecentRuns] = useState<RecentRun[]>(loadRecentRuns);
+  const [recentRuns, setRecentRuns] = useState<RecentRun[]>([]);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => setRecentRuns(loadRecentRuns()));
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
 
   const progress = useMemo(() => status === "completed" ? 100 : status === "running" ? Math.min(88, 12 + activities.length * 7) : 0, [status, activities]);
 
