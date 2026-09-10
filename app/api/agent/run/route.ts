@@ -1,5 +1,12 @@
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+
 export const runtime = "nodejs";
 export const maxDuration = 300;
+
+export function GET() {
+  return Response.json({ ok: true, service: "sitepulse-agent", runtime: "nodejs" });
+}
 
 export async function POST(request: Request) {
   try {
@@ -35,7 +42,11 @@ export async function POST(request: Request) {
     let closed = false;
     const stream = new ReadableStream({
       start(controller) {
-        void import("../../../../agent/worker.mjs").then(({ runAgent }) => runAgent(input, (event: Record<string, unknown>) => {
+        const workerUrl = pathToFileURL(path.join(process.cwd(), "agent", "worker.mjs")).href;
+        // Keep the browser runtime outside Turbopack's route-module graph; Vercel
+        // includes it through outputFileTracingIncludes and Node loads it here.
+        const importModule = new Function("specifier", "return import(specifier)") as (specifier: string) => Promise<{ runAgent: (input: unknown, emit: (event: Record<string, unknown>) => void) => Promise<void> }>;
+        void importModule(workerUrl).then(({ runAgent }) => runAgent(input, (event: Record<string, unknown>) => {
           if (!closed) controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
         })).then(() => {
           if (!closed) controller.close();
