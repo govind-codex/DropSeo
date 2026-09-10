@@ -38,6 +38,40 @@ type Profile = { siteType: string; purpose: string; primaryJourney: string; plan
 type Result = { runId: string; workflow: Workflow; goal: string; outcome: string; visitedPages: string[]; actions: Array<Record<string, unknown>>; performance: { ttfb: number; domContentLoaded: number; load: number; resources: number; vitals: { lcp: number; cls: number; longTasks: number } }; findings: Finding[]; safety: { blockedActions: number }; durationMs: number };
 type RecentRun = { runId: string; url: string; workflow: Workflow; outcome: string; findings: number; completedAt: string };
 
+function normalizeUrl(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  try {
+    return new URL(trimmed).toString();
+  } catch {
+    try {
+      return new URL(`https://${trimmed}`).toString();
+    } catch {
+      return trimmed;
+    }
+  }
+}
+
+function hostnameFor(value: string) {
+  const normalized = normalizeUrl(value);
+  if (!normalized) return "Unknown site";
+  try {
+    return new URL(normalized).hostname || "Unknown site";
+  } catch {
+    return value.trim() || "Unknown site";
+  }
+}
+
+function loadRecentRuns(): RecentRun[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const stored = JSON.parse(localStorage.getItem("sitepulse-runs") || "[]");
+    return Array.isArray(stored) ? stored : [];
+  } catch {
+    return [];
+  }
+}
+
 const workflows: Array<{ id: Workflow; icon: React.ReactNode; name: string; description: string }> = [
   { id: "autonomous", icon: <Bot />, name: "Investigate", description: "Map the site, choose important paths and test what matters." },
   { id: "journey", icon: <Route />, name: "Complete a goal", description: "Attempt a visitor task and recover when the path breaks." },
@@ -57,10 +91,7 @@ export default function Home() {
   const [snapshotUrl, setSnapshotUrl] = useState("");
   const [findings, setFindings] = useState<Finding[]>([]);
   const [result, setResult] = useState<Result | null>(null);
-  const [recentRuns, setRecentRuns] = useState<RecentRun[]>(() => {
-    if (typeof window === "undefined") return [];
-    try { return JSON.parse(localStorage.getItem("sitepulse-runs") || "[]"); } catch { return []; }
-  });
+  const [recentRuns, setRecentRuns] = useState<RecentRun[]>(loadRecentRuns);
 
   const progress = useMemo(() => status === "completed" ? 100 : status === "running" ? Math.min(88, 12 + activities.length * 7) : 0, [status, activities]);
 
@@ -116,9 +147,12 @@ export default function Home() {
       setResult(completed);
       setStatus("completed");
       setFindings(completed.findings);
-      const next: RecentRun[] = [{ runId: completed.runId, url, workflow: completed.workflow, outcome: completed.outcome, findings: completed.findings.length, completedAt: new Date().toISOString() }, ...recentRuns].slice(0, 5);
-      setRecentRuns(next);
-      localStorage.setItem("sitepulse-runs", JSON.stringify(next));
+      const completedUrl = completed.visitedPages[0] || normalizeUrl(url);
+      setRecentRuns((current) => {
+        const next: RecentRun[] = [{ runId: completed.runId, url: completedUrl, workflow: completed.workflow, outcome: completed.outcome, findings: completed.findings.length, completedAt: new Date().toISOString() }, ...current].slice(0, 5);
+        localStorage.setItem("sitepulse-runs", JSON.stringify(next));
+        return next;
+      });
     }
   }
 
@@ -176,7 +210,7 @@ export default function Home() {
           <div className="findings-list">{findings.length ? findings.map((finding) => <article className="finding-card" key={finding.id}><div className="finding-severity"><span className={finding.severity}>{finding.severity}</span><small>{finding.category} · {finding.confidence}</small></div><div className="finding-body"><h3>{finding.title}</h3><div className="expect-grid"><div><span>EXPECTED</span><p>{finding.expected}</p></div><div><span>OBSERVED</span><p>{finding.observed}</p></div></div><div className="fix"><FlaskConical /><div><span>RECOMMENDED FIX</span><p>{finding.recommendation}</p></div></div></div><div className="finding-actions"><span><Eye /> {finding.evidenceType}</span><button onClick={() => verifyFinding(finding)}><RefreshCw /> Verify fix</button></div></article>) : <div className="no-findings"><Check /><strong>No material issues were verified in this bounded run.</strong></div>}</div>
         </section>}
 
-        {recentRuns.length > 0 && <section className="history-section"><div className="results-heading"><div><span className="eyebrow"><History size={13} /> WEBSITE MEMORY</span><h2>Recent investigations</h2></div></div><div className="history-list">{recentRuns.map((run) => <article key={run.runId}><span className="history-icon"><Globe2 /></span><div><strong>{new URL(run.url).hostname}</strong><p>{run.outcome}</p></div><span>{run.workflow}</span><b>{run.findings} findings</b><small>{new Date(run.completedAt).toLocaleString()}</small><ChevronRight /></article>)}</div></section>}
+        {recentRuns.length > 0 && <section className="history-section"><div className="results-heading"><div><span className="eyebrow"><History size={13} /> WEBSITE MEMORY</span><h2>Recent investigations</h2></div></div><div className="history-list">{recentRuns.map((run) => <article key={run.runId}><span className="history-icon"><Globe2 /></span><div><strong>{hostnameFor(run.url || "")}</strong><p>{run.outcome}</p></div><span>{run.workflow}</span><b>{run.findings} findings</b><small>{new Date(run.completedAt).toLocaleString()}</small><ChevronRight /></article>)}</div></section>}
       </main>
       <footer className="agent-footer"><span><Activity /> Sitepulse Agent</span><p>Bounded autonomy · Evidence before claims · Consequential actions blocked</p></footer>
     </div>
