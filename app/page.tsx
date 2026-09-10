@@ -1,288 +1,188 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import Link from "next/link";
 import {
   Activity,
   AlertTriangle,
   ArrowRight,
-  ArrowUpRight,
+  Bot,
   Check,
-  ChevronDown,
-  CircleHelp,
-  Code2,
+  ChevronRight,
+  CircleStop,
   Download,
+  Eye,
+  FileSearch,
   FlaskConical,
+  Gauge,
   Globe2,
-  Lightbulb,
+  History,
   Loader2,
-  ScanLine,
+  LockKeyhole,
+  MousePointer2,
+  Play,
+  RefreshCw,
+  Route,
   Search,
+  ShieldCheck,
   Sparkles,
   Target,
+  TriangleAlert,
   Zap,
 } from "lucide-react";
-import { Progress } from "@/components/ui/progress";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-type CheckItem = { name: string; pass: boolean; detail: string; fix: string; category: string };
-type AiAnalysis = {
-  summary: string;
-  verdict: string;
-  quickWins: Array<{
-    title: string;
-    why: string;
-    action: string;
-    impact: "High" | "Medium" | "Low";
-    effort: "Quick" | "Moderate" | "Project";
-  }>;
-  searchUpgrade: {
-    title: string;
-    metaDescription: string;
-    keywordThemes: string[];
-    contentGap: string;
-    schemaSuggestion: string;
-  };
-  performanceStory: { diagnosis: string; likelyBottlenecks: string[]; nextTest: string };
-  growthExperiment: { name: string; hypothesis: string; steps: string[]; successMetric: string };
-  confidence: "High" | "Medium" | "Low";
-};
-type Report = {
-  url: string;
-  title: string;
-  description: string;
-  score: number;
-  checks: CheckItem[];
-  ttfb: number;
-  load: number;
-  bytes: number;
-  images: number;
-  scripts: number;
-  styles: number;
-  date: string;
-  ai: AiAnalysis | null;
-  aiError?: string | null;
-};
+type Workflow = "autonomous" | "journey" | "performance" | "verify";
+type ActivityItem = { id: string; at: string; status: "running" | "complete" | "warning" | "blocked"; title: string; detail: string };
+type Finding = { id: string; category: string; severity: string; title: string; expected: string; observed: string; recommendation: string; confidence: string; evidenceType: string };
+type Profile = { siteType: string; purpose: string; primaryJourney: string; plan: string[] };
+type Result = { runId: string; workflow: Workflow; goal: string; outcome: string; visitedPages: string[]; actions: Array<Record<string, unknown>>; performance: { ttfb: number; domContentLoaded: number; load: number; resources: number; vitals: { lcp: number; cls: number; longTasks: number } }; findings: Finding[]; safety: { blockedActions: number }; durationMs: number };
+type RecentRun = { runId: string; url: string; workflow: Workflow; outcome: string; findings: number; completedAt: string };
 
-const example: Report = {
-  url: "https://example.com/",
-  title: "Example website — A better place to start",
-  description: "An illustrative report showing how Sitepulse turns website checks into a clear action plan.",
-  score: 80,
-  ttfb: 342,
-  load: 486,
-  bytes: 68420,
-  images: 18,
-  scripts: 7,
-  styles: 3,
-  date: "",
-  checks: [
-    { name: "Page title", pass: true, detail: "A unique page title is present.", category: "Content", fix: "" },
-    { name: "Meta description", pass: true, detail: "A descriptive page summary is present.", category: "Content", fix: "" },
-    { name: "Main heading", pass: true, detail: "1 H1 heading found.", category: "Content", fix: "" },
-    { name: "Image alternative text", pass: false, detail: "4 of 18 images are missing alt attributes.", category: "Accessibility", fix: "Add descriptive alt text to informative images. Use an empty alt attribute for decorative images." },
-    { name: "Canonical URL", pass: false, detail: "No canonical link found.", category: "Technical", fix: "Add a canonical link in the page head to identify the preferred URL." },
-    { name: "Mobile viewport", pass: true, detail: "Viewport metadata present.", category: "Technical", fix: "" },
-    { name: "Search indexing", pass: true, detail: "No noindex directive found.", category: "Technical", fix: "" },
-    { name: "Secure connection", pass: true, detail: "Page served over HTTPS.", category: "Technical", fix: "" },
-    { name: "Social sharing metadata", pass: true, detail: "Open Graph title and description present.", category: "Content", fix: "" },
-    { name: "Document language", pass: true, detail: "English language declared.", category: "Accessibility", fix: "" },
-  ],
-  ai: {
-    summary: "The page covers the technical essentials, but its search identity is still too broad. Tightening image accessibility and canonical signals would make the page easier to understand for people and crawlers.",
-    verdict: "Strong foundation, blurry search promise — make the page unmistakably about one valuable outcome.",
-    quickWins: [
-      { title: "Own one search promise", why: "The title is descriptive but not specific enough to a searcher's goal.", action: "Lead the title and H1 with the primary outcome, then support it with one concrete differentiator.", impact: "High", effort: "Quick" },
-      { title: "Complete the image story", why: "Four images provide no context to screen readers or image search.", action: "Write concise alt text that explains the useful information each image contributes.", impact: "Medium", effort: "Quick" },
-      { title: "Declare the preferred URL", why: "Without a canonical, duplicate URL variants may compete for the same signals.", action: "Add a self-referencing canonical to the page head.", impact: "Medium", effort: "Quick" },
-    ],
-    searchUpgrade: {
-      title: "A Clearer Website Audit | Example",
-      metaDescription: "See the SEO and performance signals that matter, understand what is holding your page back, and leave with a focused action plan.",
-      keywordThemes: ["website audit", "SEO analysis", "page performance"],
-      contentGap: "Add a short proof section showing what improves after a user acts on the audit.",
-      schemaSuggestion: "Use WebApplication schema only if the page represents a working software product.",
-    },
-    performanceStory: {
-      diagnosis: "The HTML response looks lean enough for a quick first delivery, while the image count is the clearest area to validate in a real browser trace.",
-      likelyBottlenecks: ["Image format and dimensions may affect the largest visual element.", "Third-party scripts may delay interaction after the HTML arrives."],
-      nextTest: "Run mobile Lighthouse and compare LCP element timing with the request waterfall.",
-    },
-    growthExperiment: {
-      name: "Outcome-first snippet test",
-      hypothesis: "A title and description centered on the visitor's desired outcome will earn more qualified clicks.",
-      steps: ["Publish the proposed search snippet.", "Annotate the change date in Search Console.", "Compare 28-day query-level CTR against the previous period."],
-      successMetric: "Higher non-brand organic CTR without a drop in average qualified position.",
-    },
-    confidence: "Medium",
-  },
-};
+const workflows: Array<{ id: Workflow; icon: React.ReactNode; name: string; description: string }> = [
+  { id: "autonomous", icon: <Bot />, name: "Investigate", description: "Map the site, choose important paths and test what matters." },
+  { id: "journey", icon: <Route />, name: "Complete a goal", description: "Attempt a visitor task and recover when the path breaks." },
+  { id: "performance", icon: <Gauge />, name: "Performance detective", description: "Measure the real page and investigate likely causes." },
+  { id: "verify", icon: <RefreshCw />, name: "Verify a fix", description: "Replay a previous problem and compare the behavior." },
+];
 
 export default function Home() {
   const [url, setUrl] = useState("");
-  const [report, setReport] = useState<Report>(example);
-  const [demo, setDemo] = useState(true);
-  const [loading, setLoading] = useState(false);
+  const [workflow, setWorkflow] = useState<Workflow>("autonomous");
+  const [goal, setGoal] = useState("");
+  const [status, setStatus] = useState<"idle" | "running" | "completed" | "error">("idle");
   const [error, setError] = useState("");
-  const [tab, setTab] = useState("overview");
-  const [filter, setFilter] = useState("all");
-  const failed = report.checks.filter((check) => !check.pass);
-  const passed = report.checks.length - failed.length;
+  const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [snapshot, setSnapshot] = useState("");
+  const [snapshotUrl, setSnapshotUrl] = useState("");
+  const [findings, setFindings] = useState<Finding[]>([]);
+  const [result, setResult] = useState<Result | null>(null);
+  const [recentRuns, setRecentRuns] = useState<RecentRun[]>(() => {
+    if (typeof window === "undefined") return [];
+    try { return JSON.parse(localStorage.getItem("sitepulse-runs") || "[]"); } catch { return []; }
+  });
 
-  async function analyze(event: React.FormEvent) {
-    event.preventDefault();
+  const progress = useMemo(() => status === "completed" ? 100 : status === "running" ? Math.min(88, 12 + activities.length * 7) : 0, [status, activities]);
+
+  async function startRun(event?: React.FormEvent, override?: { workflow: Workflow; goal: string }) {
+    event?.preventDefault();
+    const activeWorkflow = override?.workflow || workflow;
+    const activeGoal = override?.goal ?? goal;
+    setWorkflow(activeWorkflow);
+    setGoal(activeGoal);
+    setStatus("running");
     setError("");
-    setLoading(true);
+    setActivities([]);
+    setProfile(null);
+    setSnapshot("");
+    setSnapshotUrl("");
+    setFindings([]);
+    setResult(null);
     try {
-      const response = await fetch("/api/analyze", {
+      const response = await fetch("/api/agent/run", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url, workflow: activeWorkflow, goal: activeGoal, maxActions: 10, maxPages: 4 }),
       });
-      const data = (await response.json()) as Report & { error?: string };
-      if (!response.ok) throw new Error(data.error);
-      setReport(data);
-      setDemo(false);
-      setTab(data.ai ? "ai" : "overview");
+      if (!response.ok || !response.body) {
+        const payload = await response.json().catch(() => ({ error: "Unable to start the browser agent." }));
+        throw new Error(payload.error || "Unable to start the browser agent.");
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { value, done } = await reader.read();
+        buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) if (line.trim()) handleEvent(JSON.parse(line));
+        if (done) break;
+      }
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Analysis failed. Try again.");
-    } finally {
-      setLoading(false);
+      setError(caught instanceof Error ? caught.message : "The run failed unexpectedly.");
+      setStatus("error");
     }
   }
 
-  function download() {
-    const blob = new Blob([JSON.stringify({ ...report, illustrative: demo }, null, 2)], { type: "application/json" });
-    const anchor = document.createElement("a");
-    anchor.href = URL.createObjectURL(blob);
-    anchor.download = `sitepulse-${new URL(report.url).hostname}.json`;
-    anchor.click();
-    URL.revokeObjectURL(anchor.href);
+  function handleEvent(event: Record<string, unknown>) {
+    if (event.type === "activity") setActivities((items) => [...items, { id: `${String(event.at)}-${items.length}`, at: String(event.at), status: event.status as ActivityItem["status"], title: String(event.title), detail: String(event.detail) }]);
+    if (event.type === "profile") setProfile(event.profile as Profile);
+    if (event.type === "snapshot") { setSnapshot(String(event.image)); setSnapshotUrl(String(event.url)); }
+    if (event.type === "finding") setFindings((items) => [...items, event.finding as Finding]);
+    if (event.type === "error") { setError(String(event.error)); setStatus("error"); }
+    if (event.type === "complete") {
+      const completed = event.result as Result;
+      setResult(completed);
+      setStatus("completed");
+      setFindings(completed.findings);
+      const next: RecentRun[] = [{ runId: completed.runId, url, workflow: completed.workflow, outcome: completed.outcome, findings: completed.findings.length, completedAt: new Date().toISOString() }, ...recentRuns].slice(0, 5);
+      setRecentRuns(next);
+      localStorage.setItem("sitepulse-runs", JSON.stringify(next));
+    }
   }
 
-  function checklist(items: CheckItem[]) {
-    return (
-      <div className="checklist">
-        {items.map((check) => (
-          <details key={check.name}>
-            <summary>
-              <span className={`check-icon ${check.pass ? "good" : "warn"}`}>
-                {check.pass ? <Check size={16} /> : <AlertTriangle size={16} />}
-              </span>
-              <span className="check-name">{check.name}<small>{check.category}</small></span>
-              <span className={`badge ${check.pass ? "good" : "warn"}`}>{check.pass ? "Passed" : "Needs attention"}</span>
-              <ChevronDown size={16} />
-            </summary>
-            <div className="check-detail">
-              <p>{check.detail}</p>
-              {!check.pass && <p><strong>Recommended fix:</strong> {check.fix}</p>}
-            </div>
-          </details>
-        ))}
-      </div>
-    );
+  function verifyFinding(finding: Finding) {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    startRun(undefined, { workflow: "verify", goal: `${finding.title}. Expected behavior: ${finding.expected}` });
+  }
+
+  function exportReport() {
+    if (!result) return;
+    const blob = new Blob([JSON.stringify({ ...result, profile }, null, 2)], { type: "application/json" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `sitepulse-agent-${result.runId.slice(0, 8)}.json`;
+    link.click();
+    URL.revokeObjectURL(link.href);
   }
 
   return (
-    <div className="app">
-      <header>
-        <a className="brand" href="/" aria-label="Sitepulse home"><span className="brand-icon"><Activity size={23} /></span>sitepulse<span className="brand-dot">.</span></a>
-        <span className="header-label">Website intelligence</span>
-        <a className="header-help" href="#methodology"><CircleHelp size={17} /> How it works</a>
+    <div className="agent-app">
+      <header className="topbar">
+        <Link className="brand" href="/" aria-label="Sitepulse home"><span className="brand-mark"><Activity size={21} /></span>sitepulse<span>.</span></Link>
+        <div className="product-name"><Bot size={15} /> Agent workspace</div>
+        <div className="safe-badge"><ShieldCheck size={15} /> Safe mode enforced</div>
         <div className="avatar">SP</div>
       </header>
-      <main>
-        <div className="heading-row">
-          <div><div className="eyebrow">YOUR WEBSITE, UNDERSTOOD</div><h1>A clearer picture of your website.</h1><p>Measured signals, interpreted by AI, turned into your next best moves.</p></div>
-          <span className="workspace-tag"><Sparkles size={16} /> Gemini strategist</span>
-        </div>
-        <form onSubmit={analyze} className="audit-form">
-          <Globe2 size={21} />
-          <label className="sr-only" htmlFor="website">Website URL</label>
-          <input id="website" value={url} onChange={(event) => setUrl(event.target.value)} placeholder="Enter your website URL" required disabled={loading} />
-          <span className="public-label">Public websites</span>
-          <button className="primary" disabled={loading}>{loading ? <Loader2 className="spin" size={17} /> : <Sparkles size={17} />} {loading ? "Reading & reasoning…" : "Analyze with AI"}{!loading && <ArrowRight size={16} />}</button>
-        </form>
-        {error && <div role="alert" className="error"><AlertTriangle size={18} />{error}</div>}
 
-        <section className="report" aria-busy={loading}>
-          <div className="report-top">
-            <div className="domain"><span className="domain-icon"><Globe2 size={23} /></span><div><h2>{new URL(report.url).hostname} <ArrowUpRight size={16} /></h2><span>{demo ? "Explore an illustrative AI report before running your audit." : `Analyzed ${new Date(report.date).toLocaleString()} · Single page audit`}</span></div></div>
-            <div className="report-actions">{demo && <span className="demo-badge">Example report</span>}<button className="secondary" onClick={download} disabled={loading}><Download size={16} /> Export report</button></div>
-          </div>
-
-          {loading ? (
-            <div className="loading-state" role="status"><Loader2 size={28} className="spin" /><h3>Building your strategy…</h3><p>Reading the page, checking its signals, and asking Gemini to prioritize the opportunities.</p><div className="skeleton-grid">{[1, 2, 3, 4].map((number) => <Skeleton key={number} className="h-36 w-full rounded-xl" />)}</div></div>
-          ) : (
-            <Tabs value={tab} onValueChange={setTab}>
-              <TabsList variant="line" className="report-tabs">
-                <TabsTrigger value="overview"><Activity /> Overview</TabsTrigger>
-                <TabsTrigger value="ai"><Sparkles /> AI strategy</TabsTrigger>
-                <TabsTrigger value="seo"><Search /> SEO <span className="tab-count">{report.checks.length}</span></TabsTrigger>
-                <TabsTrigger value="performance"><Zap /> Performance</TabsTrigger>
-              </TabsList>
-              <TabsContent value="overview">
-                <div className="score-grid">
-                  <div className="score-card lead"><div className="card-label">SEO health <Search size={16} /></div><div className="score-body"><div><strong>{report.score}<em>/ 100</em></strong><span className="score-caption">{report.score >= 90 ? "Looking healthy" : report.score >= 60 ? "Room to improve" : "Needs attention"}</span></div><div className="ring" style={{ "--score": `${report.score}%` } as React.CSSProperties}><Check size={22} /></div></div><p>{passed} of {report.checks.length} checks passed</p></div>
-                  <Metric title="Server response" value={(report.ttfb / 1000).toFixed(2)} unit="s" icon={<Zap size={16} />} caption="Time to response headers" />
-                  <Metric title="HTML page weight" value={(report.bytes / 1024).toFixed(1)} unit="KB" icon={<Code2 size={16} />} caption="Uncompressed page HTML" />
-                  <Metric title="Opportunities" value={String(failed.length).padStart(2, "0")} icon={<ScanLine size={16} />} caption="Actionable SEO improvements" />
-                </div>
-                <div className="overview-grid">
-                  <section className="panel"><div className="panel-heading"><div><h3>Make your next move count</h3><p>Your highest-priority opportunities, in one place.</p></div><span className="count-label">{failed.length} to improve</span></div>{failed.length ? checklist(failed) : <div className="success-empty"><Check /> All checks passed. Your page has the essentials covered.</div>}<button className="text-button" onClick={() => setTab("seo")}>View all SEO checks <ArrowRight size={16} /></button></section>
-                  <section className="panel health-panel"><div className="panel-heading"><h3>Audit breakdown</h3><span className="muted">{report.checks.length} checks</span></div><div className="health-number">{passed}<span>checks passed</span><span className="healthy-tag">{report.score}%</span></div><div className="segments">{report.checks.map((check, index) => <span key={index} className={check.pass ? "pass-segment" : "warning-segment"} />)}</div><div className="legend"><span><i className="green-dot" />Passed <b>{passed}</b></span><span><i className="orange-dot" />Needs attention <b>{failed.length}</b></span></div><div className="health-note"><span className="note-icon"><Activity size={20} /></span><p>Small improvements add up.<br /><strong>Start with your page essentials.</strong></p></div></section>
-                </div>
-                <section className="performance-strip"><div className="strip-icon ai-icon"><Sparkles size={22} /></div><div><h3>Let Gemini connect the dots</h3><p>Turn checks and page content into a practical, prioritized strategy.</p></div><button className="secondary" onClick={() => setTab("ai")}>Open AI strategy <ArrowUpRight size={16} /></button></section>
-              </TabsContent>
-
-              <TabsContent value="ai">
-                {report.ai ? <AiStrategy ai={report.ai} /> : <section className="panel ai-unavailable"><AlertTriangle size={24} /><div><h3>AI strategy is unavailable</h3><p>{report.aiError || "The measured audit is still ready in the other tabs. Try the analysis again shortly."}</p></div></section>}
-              </TabsContent>
-
-              <TabsContent value="seo">
-                <section className="panel seo-panel"><div className="panel-heading"><div><h3>SEO checks</h3><p>Inspect the signals found in your page’s HTML.</p></div><label className="filter">Show <Select value={filter} onValueChange={setFilter}><SelectTrigger aria-label="Filter SEO checks"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All checks</SelectItem><SelectItem value="issues">Needs attention</SelectItem><SelectItem value="passed">Passed</SelectItem></SelectContent></Select></label></div>{checklist(report.checks.filter((check) => filter === "all" || (filter === "issues" ? !check.pass : check.pass)))}{filter === "issues" && !failed.length && <p className="success-empty">No issues found in these checks.</p>}</section>
-                <section className="panel search-preview"><h3>Current search preview</h3><p className="preview-url">{report.url}</p><h4>{report.title || "No page title found"}</h4><p>{report.description || "No meta description found."}</p><small>Illustrative preview. Search engines may display different text.</small></section>
-              </TabsContent>
-
-              <TabsContent value="performance">
-                <div className="score-grid"><Metric title="Response headers" value={(report.ttfb / 1000).toFixed(2)} unit="s" icon={<Zap size={16} />} caption="Measured from the audit server" /><Metric title="HTML download" value={(report.load / 1000).toFixed(2)} unit="s" icon={<Download size={16} />} caption="Total fetch time, including headers" /><Metric title="HTML size" value={(report.bytes / 1024).toFixed(1)} unit="KB" icon={<Code2 size={16} />} caption="Decoded response body" /><Metric title="Images" value={String(report.images)} icon={<Globe2 size={16} />} caption="Image elements in page HTML" /></div>
-                <section className="panel resources"><h3>Page resource inventory</h3><p>Referenced resources found in the original HTML.</p>{[["Images", report.images], ["External scripts", report.scripts], ["Stylesheets", report.styles]].map(([label, number]) => <div className="resource-row" key={label}><span>{label}</span><Progress value={Math.min(100, Number(number) / Math.max(1, report.images, report.scripts, report.styles) * 100)} /><b>{number}</b></div>)}<div className="measurement-note"><Zap size={22} /><p><strong>A server-side snapshot</strong><br />These timings describe a single HTML fetch, not a browser page load. JavaScript is not executed and resources are not downloaded. Core Web Vitals and Lighthouse scores require a browser-based test.</p></div></section>
-              </TabsContent>
-            </Tabs>
-          )}
+      <main className="agent-main">
+        <section className="mission-control">
+          <div className="mission-copy"><span className="eyebrow"><Sparkles size={13} /> AUTONOMOUS WEBSITE INTELLIGENCE</span><h1>Give the agent a website.<br /><em>Watch it find the truth.</em></h1><p>It explores, acts, recovers from failures, collects evidence and verifies outcomes in a real browser.</p></div>
+          <form className="launcher" onSubmit={startRun}>
+            <label htmlFor="target-url">Website to investigate</label>
+            <div className="url-row"><Globe2 size={20} /><input id="target-url" value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://your-website.com" required disabled={status === "running"} /><span>PUBLIC WEB</span></div>
+            <fieldset><legend>Choose an agent workflow</legend><div className="workflow-grid">{workflows.map((item) => <button type="button" key={item.id} className={`workflow-card ${workflow === item.id ? "selected" : ""}`} onClick={() => setWorkflow(item.id)} disabled={status === "running"}><span className="workflow-icon">{item.icon}</span><span><strong>{item.name}</strong><small>{item.description}</small></span><span className="radio-dot" /></button>)}</div></fieldset>
+            {(workflow === "journey" || workflow === "verify") && <label className="goal-field" htmlFor="agent-goal"><span>{workflow === "verify" ? "Behavior to verify" : "Visitor goal"}</span><textarea id="agent-goal" value={goal} onChange={(event) => setGoal(event.target.value)} placeholder={workflow === "verify" ? "The pricing CTA should open signup" : "Find the cheapest plan without creating an account"} required /></label>}
+            <div className="launch-footer"><div className="limits"><span><MousePointer2 size={14} /> 10 actions</span><span><FileSearch size={14} /> 4 pages</span><span><LockKeyhole size={14} /> No submissions</span></div><button className="run-button" disabled={status === "running"}>{status === "running" ? <Loader2 className="spin" /> : <Play />} {status === "running" ? "Agent running…" : "Launch agent"}<ArrowRight /></button></div>
+          </form>
         </section>
-        <footer id="methodology"><span><Activity size={16} /> Built for a healthier web.</span><p>Measured HTML signals · Gemini interpretation · No browser rendering{demo ? " · Sample data" : ""}</p></footer>
+
+        {error && <div className="agent-error" role="alert"><TriangleAlert /><div><strong>Run interrupted</strong><p>{error}</p></div></div>}
+
+        <section className={`workspace ${status}`} aria-live="polite">
+          <div className="workspace-bar"><div><span className={`status-pulse ${status}`} /> <strong>{status === "idle" ? "Agent ready" : status === "running" ? "Investigation in progress" : status === "completed" ? "Investigation complete" : "Agent stopped"}</strong></div><div className="progress-track"><span style={{ width: `${progress}%` }} /></div><span>{progress}%</span></div>
+          <div className="workspace-grid">
+            <aside className="plan-panel"><div className="panel-title"><Target size={17} /> Investigation plan</div>{profile ? <><div className="site-profile"><span>{profile.siteType}</span><strong>{profile.primaryJourney}</strong><p>{profile.purpose}</p></div><ol className="plan-list">{profile.plan.map((step, index) => <li key={step} className={index < Math.max(1, Math.ceil(activities.length / 3)) ? "done" : ""}><span>{index < Math.max(1, Math.ceil(activities.length / 3)) ? <Check /> : index + 1}</span>{step}</li>)}</ol></> : <div className="empty-panel"><Bot /><strong>{status === "running" ? "Reading the website…" : "Waiting for a mission"}</strong><p>The adaptive plan will appear after the agent understands the site.</p></div>}<div className="guardrails"><ShieldCheck /><div><strong>Guardrails active</strong><p>Same-domain navigation, sensitive-field protection and consequential-action blocking.</p></div></div></aside>
+
+            <section className="browser-panel"><div className="browser-chrome"><div className="browser-dots"><i /><i /><i /></div><div className="address"><LockKeyhole size={12} />{snapshotUrl || "Browser evidence will appear here"}</div><span>LIVE</span></div><div className="viewport">{snapshot ? <img src={snapshot} alt={`Browser evidence captured at ${snapshotUrl}`} /> : <div className="viewport-empty"><Eye /><strong>Real browser evidence</strong><p>Launch the agent to watch its latest viewport.</p></div>}<div className="scan-line" /></div><div className="evidence-footer"><span><Eye size={14} /> Latest visual evidence</span><span>{snapshot ? "Screenshot captured" : "No evidence yet"}</span></div></section>
+
+            <aside className="activity-panel"><div className="panel-title"><Activity size={17} /> Agent activity <span>{activities.length}</span></div><div className="activity-feed">{activities.length ? activities.map((item, index) => <article key={item.id}><span className={`activity-icon ${item.status}`}>{item.status === "complete" ? <Check /> : item.status === "running" ? <Loader2 className="spin" /> : item.status === "blocked" ? <CircleStop /> : <AlertTriangle />}</span><div><strong>{item.title}</strong><p>{item.detail}</p><small>Step {index + 1}</small></div></article>) : <div className="empty-panel compact"><Zap /><strong>Observe → plan → act</strong><p>Concise actions and observations appear here without exposing private chain-of-thought.</p></div>}</div></aside>
+          </div>
+        </section>
+
+        {(status === "completed" || findings.length > 0) && <section className="results"><div className="results-heading"><div><span className="eyebrow"><Search size={13} /> EVIDENCE-BACKED REPORT</span><h2>{result?.outcome || "Findings collected during the run"}</h2><p>{result ? `${result.visitedPages.length} pages · ${result.actions.length} browser actions · ${(result.durationMs / 1000).toFixed(1)} seconds` : "Findings appear as they are verified."}</p></div>{result && <button className="export-button" onClick={exportReport}><Download /> Export evidence report</button>}</div>
+          {result && <div className="metric-grid"><Metric icon={<Gauge />} label="LCP observed" value={result.performance.vitals.lcp ? `${(result.performance.vitals.lcp / 1000).toFixed(2)}s` : "—"} /><Metric icon={<Zap />} label="Response start" value={`${(result.performance.ttfb / 1000).toFixed(2)}s`} /><Metric icon={<FileSearch />} label="Resources" value={String(result.performance.resources)} /><Metric icon={<ShieldCheck />} label="Blocked actions" value={String(result.safety.blockedActions)} /></div>}
+          <div className="findings-list">{findings.length ? findings.map((finding) => <article className="finding-card" key={finding.id}><div className="finding-severity"><span className={finding.severity}>{finding.severity}</span><small>{finding.category} · {finding.confidence}</small></div><div className="finding-body"><h3>{finding.title}</h3><div className="expect-grid"><div><span>EXPECTED</span><p>{finding.expected}</p></div><div><span>OBSERVED</span><p>{finding.observed}</p></div></div><div className="fix"><FlaskConical /><div><span>RECOMMENDED FIX</span><p>{finding.recommendation}</p></div></div></div><div className="finding-actions"><span><Eye /> {finding.evidenceType}</span><button onClick={() => verifyFinding(finding)}><RefreshCw /> Verify fix</button></div></article>) : <div className="no-findings"><Check /><strong>No material issues were verified in this bounded run.</strong></div>}</div>
+        </section>}
+
+        {recentRuns.length > 0 && <section className="history-section"><div className="results-heading"><div><span className="eyebrow"><History size={13} /> WEBSITE MEMORY</span><h2>Recent investigations</h2></div></div><div className="history-list">{recentRuns.map((run) => <article key={run.runId}><span className="history-icon"><Globe2 /></span><div><strong>{new URL(run.url).hostname}</strong><p>{run.outcome}</p></div><span>{run.workflow}</span><b>{run.findings} findings</b><small>{new Date(run.completedAt).toLocaleString()}</small><ChevronRight /></article>)}</div></section>}
       </main>
+      <footer className="agent-footer"><span><Activity /> Sitepulse Agent</span><p>Bounded autonomy · Evidence before claims · Consequential actions blocked</p></footer>
     </div>
   );
 }
 
-function AiStrategy({ ai }: { ai: AiAnalysis }) {
-  return (
-    <div className="ai-layout">
-      <section className="ai-hero">
-        <div className="ai-kicker"><Sparkles size={15} /> Gemini strategy · {ai.confidence} confidence</div>
-        <h3>{ai.verdict}</h3>
-        <p>{ai.summary}</p>
-      </section>
-      <section className="panel ai-section">
-        <div className="panel-heading"><div><h3>Priority moves</h3><p>Ordered by likely impact and effort.</p></div><Target size={20} /></div>
-        <div className="wins-grid">{ai.quickWins.map((win, index) => <article className="win-card" key={win.title}><div className="win-top"><span className="win-number">0{index + 1}</span><span className={`impact ${win.impact.toLowerCase()}`}>{win.impact} impact</span><span className="effort">{win.effort}</span></div><h4>{win.title}</h4><p>{win.why}</p><div className="action"><ArrowRight size={15} /><span>{win.action}</span></div></article>)}</div>
-      </section>
-      <div className="ai-columns">
-        <section className="panel ai-section search-upgrade"><div className="panel-heading"><div><h3>Search snippet upgrade</h3><p>AI-written from this page’s actual content.</p></div><Search size={20} /></div><div className="snippet"><span>Suggested title · {ai.searchUpgrade.title.length} chars</span><h4>{ai.searchUpgrade.title}</h4><p>{ai.searchUpgrade.metaDescription}</p></div><div className="theme-list">{ai.searchUpgrade.keywordThemes.map((theme) => <span key={theme}>{theme}</span>)}</div><InsightRow label="Content gap" value={ai.searchUpgrade.contentGap} /><InsightRow label="Structured data" value={ai.searchUpgrade.schemaSuggestion} /></section>
-        <section className="panel ai-section"><div className="panel-heading"><div><h3>Performance story</h3><p>Hypotheses grounded in the measured snapshot.</p></div><Zap size={20} /></div><p className="diagnosis">{ai.performanceStory.diagnosis}</p><ul>{ai.performanceStory.likelyBottlenecks.map((item) => <li key={item}>{item}</li>)}</ul><div className="next-test"><Lightbulb size={18} /><div><strong>Validate next</strong><p>{ai.performanceStory.nextTest}</p></div></div></section>
-      </div>
-      <section className="experiment"><div className="experiment-icon"><FlaskConical size={23} /></div><div className="experiment-copy"><span>GROWTH EXPERIMENT</span><h3>{ai.growthExperiment.name}</h3><p>{ai.growthExperiment.hypothesis}</p></div><ol>{ai.growthExperiment.steps.map((step) => <li key={step}>{step}</li>)}</ol><div className="success-metric"><span>Success looks like</span><strong>{ai.growthExperiment.successMetric}</strong></div></section>
-    </div>
-  );
-}
-
-function InsightRow({ label, value }: { label: string; value: string }) {
-  return <div className="insight-row"><span>{label}</span><p>{value}</p></div>;
-}
-
-function Metric({ title, value, unit, icon, caption }: { title: string; value: string; unit?: string; icon: React.ReactNode; caption: string }) {
-  return <div className="score-card"><div className="card-label">{title}{icon}</div><div className="score-body"><strong>{value}<em>{unit}</em></strong></div><p>{caption}</p></div>;
+function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  return <div className="metric"><span>{icon}</span><div><small>{label}</small><strong>{value}</strong></div></div>;
 }

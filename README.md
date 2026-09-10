@@ -1,4 +1,34 @@
-# vinext-starter
+# Sitepulse Agent
+
+Sitepulse is a bounded autonomous browser agent for website investigation. It uses a real Playwright-controlled Chromium session, Gemini planning, deterministic SEO/accessibility/performance checks, an evidence stream, recovery after failed actions, and fix verification.
+
+## Run the complete local product
+
+```powershell
+npm install
+npm run dev
+```
+
+Open `http://localhost:5173`. The `dev` command starts both the dashboard and browser-agent worker. Configure `GEMINI_API_KEY` and `GEMINI_MODEL` in `.env.local`.
+
+The worker listens only on `127.0.0.1:8788`. For a hosted dashboard, deploy `agent/worker.mjs` to a long-running Node.js service with Chrome available, then set `AGENT_WORKER_URL` and an optional shared `AGENT_WORKER_TOKEN` in the dashboard environment.
+
+### Safety boundaries
+
+- Public HTTP/HTTPS targets only; private and link-local networks are rejected.
+- Main-frame navigation stays on the approved domain and its subdomains.
+- Purchases, destructive actions, form submissions, and sensitive fields are blocked.
+- Every run has page, action, and time budgets.
+- Website content is treated as untrusted evidence, never as agent instructions.
+
+### Agent-specific layout
+
+- `app/page.tsx` — streaming agent workspace and evidence report.
+- `app/api/agent/run/route.ts` — dashboard-to-worker streaming proxy.
+- `agent/worker.mjs` — Playwright executor, planner loop, safeguards, measurements, and evidence storage.
+- `outputs/runs/` — ignored local run reports and screenshots.
+
+## Framework notes
 
 A clean full-stack starter running on [vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and Drizzle support.
 

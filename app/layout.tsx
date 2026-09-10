@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Sitepulse | SEO & Performance Analytics",
-  description: "Understand your website's SEO health and performance with actionable page audits.",
+  title: "Sitepulse Agent | Autonomous Website Intelligence",
+  description: "A browser agent that explores websites, tests real journeys, collects evidence, and verifies fixes.",
   other: {
     "codex-preview": "development",
   },
