@@ -1,147 +1,344 @@
-# Sitepulse Agent
+::: {align="center"}
 
-Sitepulse is a bounded autonomous browser agent for website investigation. It uses a real Playwright-controlled Chromium session, Gemini planning, deterministic SEO/accessibility/performance checks, an evidence stream, recovery after failed actions, and fix verification.
+⚡ DropSeo Agent
 
-## Run the complete local product
+Autonomous Website Intelligence, Testing & Optimization Agent
 
-```powershell
+<p>
+
+<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=22&pause=1000&center=true&vCenter=true&width=760&lines=Explore+%E2%86%92+Reason+%E2%86%92+Test+%E2%86%92+Diagnose;SEO+%2B+Performance+%2B+Accessibility+%2B+UX;Real+Browser.+Real+Evidence.+Actionable+Fixes." alt="DropSeo typing animation" />{=html}
+
+</p>
+
+<p>
+
+<img src="https://img.shields.io/badge/Browser-Playwright-2EAD33?style=for-the-badge&logo=playwright&logoColor=white" />{=html}
+<img src="https://img.shields.io/badge/AI-Gemini-8E75B2?style=for-the-badge&logo=googlegemini&logoColor=white" />{=html}
+<img src="https://img.shields.io/badge/Runtime-Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white" />{=html}
+<img src="https://img.shields.io/badge/Frontend-TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white" />{=html}
+
+</p>
+
+DropSeo is not another URL → score → AI-summary wrapper.
+It launches a real Chromium browser, investigates a website, gathers
+deterministic evidence, recovers from failed actions, and turns findings
+into prioritized fixes.
+:::
+
+🤖 Watch the Agent Think in Actions
+
+┌──────────────────────────────────────────────────────────────┐
+│                     SITEPULSE AGENT                         │
+├──────────────────────────────────────────────────────────────┤
+│  URL                                                        │
+│  https://example.com                                        │
+│                         ↓                                    │
+│  👀 OBSERVE → 🧠 PLAN → 🖱️ ACT → 🔎 EVALUATE               │
+│                         ↓                                    │
+│              ↖──── RECOVER / ADAPT ────↙                    │
+│                         ↓                                    │
+│                    ✅ VERIFY                                 │
+│                         ↓                                    │
+│        Evidence-backed, prioritized recommendations          │
+└──────────────────────────────────────────────────────────────┘
+
+<p align="center">
+
+<b>{=html}Real browser session • bounded autonomy • deterministic
+checks • AI planning</b>{=html}
+
+</p>
+
+✨ What Makes Sitepulse Different?
+
+Capability                          What Sitepulse does
+
+🧭 Autonomous Exploration       Uses a real Playwright-controlled
+Chromium session to investigate the
+target site.
+
+🧠 AI Planning                  Gemini helps plan browser-agent
+actions instead of only summarizing
+a static report.
+
+🔍 SEO Analysis                 Runs deterministic SEO checks and
+turns evidence into useful
+findings.
+
+⚡ Performance Investigation    Collects performance evidence and
+helps identify optimization
+opportunities.
+
+♿ Accessibility Checks         Detects accessibility issues
+through deterministic inspection.
+
+🧪 Browser Interaction          Works through real browser actions
+rather than relying only on
+HTTP/API responses.
+
+🛟 Recovery                     The agent can recover after failed
+actions instead of immediately
+terminating.
+
+📸 Evidence Stream              Run reports and screenshots provide
+evidence for what the agent
+observed.
+
+✅ Fix Verification             Supports verification so
+improvements can be checked rather
+than merely suggested.
+
+🔄 Agent Loop
+
+flowchart LR
+    A[🌐 Target URL] --> B[👀 Observe]
+    B --> C[🧠 Plan]
+    C --> D[🖱️ Browser Action]
+    D --> E[🔎 Evaluate]
+    E -->|Need more evidence| B
+    E -->|Action failed| F[🛟 Recover]
+    F --> B
+    E -->|Investigation complete| G[📊 Prioritize Findings]
+    G --> H[🛠️ Recommend Fixes]
+    H --> I[✅ Verify]
+
+The core idea is simple:
+
+Observe → Plan → Act → Evaluate → Recover → Verify → Report
+
+Sitepulse separates tasks by responsibility: browser automation performs
+interactions, deterministic checks collect measurable evidence, and the
+AI layer handles planning and interpretation.
+
+🎯 Current MVP
+
+Sitepulse currently combines:
+
+Playwright-controlled Chromium for real browser execution
+
+Gemini planning for agent decisions
+
+deterministic SEO, accessibility and performance checks
+
+streaming agent activity and evidence
+
+recovery after failed actions
+
+fix verification
+
+local storage of run reports and screenshots
+
+The browser worker is intentionally bounded rather than being given
+unrestricted control.
+
+🛡️ Safety by Design
+
+Sitepulse treats every website as untrusted input.
+
+Public HTTP/HTTPS only
+        │
+        ├── Private/link-local networks → BLOCKED
+        ├── Cross-domain main navigation → BLOCKED
+        ├── Purchases/destructive actions → BLOCKED
+        ├── Form submissions → BLOCKED
+        ├── Sensitive fields → BLOCKED
+        └── Page/action/time budgets → ENFORCED
+
+Website content is evidence --- never agent instructions.
+
+🏗️ Architecture
+
+flowchart TB
+    U[👤 User] --> UI[🖥️ Sitepulse Dashboard]
+    UI --> API[🔌 Agent Run API]
+    API --> W[🤖 Browser Agent Worker]
+
+    W --> P[🧠 Gemini Planner]
+    W --> B[🌐 Playwright / Chromium]
+    W --> C[🔍 Deterministic Checks]
+
+    B --> T[🎯 Target Website]
+    C --> S[SEO]
+    C --> A[Accessibility]
+    C --> PF[Performance]
+
+    P --> W
+    B --> E[📸 Evidence]
+    S --> E
+    A --> E
+    PF --> E
+
+    E --> R[📊 Findings + Fixes + Verification]
+    R --> UI
+
+📂 Agent-Specific Structure
+
+sitepulse-project/
+│
+├── app/
+│   ├── page.tsx
+│   │   └── Streaming agent workspace + evidence report
+│   │
+│   └── api/
+│       └── agent/
+│           └── run/
+│               └── route.ts
+│                   └── Dashboard → worker streaming proxy
+│
+├── agent/
+│   └── worker.mjs
+│       ├── Playwright executor
+│       ├── Planner loop
+│       ├── Safeguards
+│       ├── Measurements
+│       └── Evidence storage
+│
+├── outputs/
+│   └── runs/
+│       └── Local reports + screenshots (gitignored)
+│
+└── .env.local
+
+🚀 Run Locally
+
+Prerequisites
+
+Node.js >= 22.13.0
+
+Windows, macOS, or Linux
+
+Gemini API key
+
+1. Install dependencies
+
+npm install
+
+2. Configure environment
+
+Create/update .env.local:
+
+GEMINI_API_KEY=your_gemini_api_key
+GEMINI_MODEL=your_supported_model
+
+Never commit real API keys.
+
+3. Start Sitepulse
+
+npm run dev
+
+Open:
+
+http://localhost:5173
+
+The development command starts both the dashboard and browser-agent
+worker.
+
+The worker listens locally on:
+
+127.0.0.1:8788
+
+☁️ Hosted Architecture
+
+For a hosted dashboard, the browser worker needs a long-running
+Node.js environment with Chrome available.
+
+Configure:
+
+AGENT_WORKER_URL=your_worker_url
+AGENT_WORKER_TOKEN=your_optional_shared_token
+
+The dashboard communicates with that worker while the worker owns the
+browser session, safeguards, measurements and evidence generation.
+
+🧰 Tech Stack
+
+::: {align="center"}
+Layer                Technology
+
+🖥️ UI                TypeScript / Vinext
+🤖 Agent             Node.js
+🌐 Browser           Playwright + Chromium
+🧠 AI Planning       Gemini
+📊 Evidence          Agent run reports + screenshots
+🗃️ Optional Data     Cloudflare D1 + Drizzle
+☁️ Runtime Support   Cloudflare/Vinext tooling
+:::
+
+🧪 Useful Commands
+
+# Development
+npm run dev
+
+# Production build
+npm run build
+
+# Preview built worker
+npm run start
+
+# Locked dependency install
+npm run install:ci
+
+# Generate Drizzle migrations
+npm run db:generate
+
+🗺️ Product Direction
+
+                    SITEPULSE
+                        │
+          ┌─────────────┼─────────────┐
+          ▼             ▼             ▼
+     Website Audit   User Journey    QA Agent
+          │             Testing         │
+          ▼               │             ▼
+   SEO / A11y / Perf      │        Broken Flows
+          └───────────────┼─────────────┘
+                          ▼
+                    AI Diagnosis
+                          ▼
+                 Prioritized Fixes
+                          ▼
+                    Verification
+
+Potential expansion areas include goal-driven user journeys, autonomous
+QA, conversion-flow analysis, competitor intelligence and regression
+monitoring. The priority is to add workflows that require genuine
+browser interaction rather than inflate the product with generic AI
+summaries.
+
+🧠 Design Principle
+
+Deterministic tool can measure it?  → Use the deterministic tool.
+Browser needs to interact with it?  → Use Playwright.
+Decision requires context?          → Use the AI planner.
+Claim needs proof?                  → Attach evidence.
+Fix was applied?                    → Verify it.
+
+🤝 Contributing
+
+git clone https://github.com/govind-codex/DropSeo.git
+cd DropSeo
 npm install
 npm run dev
-```
 
-Open `http://localhost:5173`. The `dev` command starts both the dashboard and browser-agent worker. Configure `GEMINI_API_KEY` and `GEMINI_MODEL` in `.env.local`.
+Create a branch, make your changes, validate the build, and open a pull
+request.
 
-The worker listens only on `127.0.0.1:8788`. For a hosted dashboard, deploy `agent/worker.mjs` to a long-running Node.js service with Chrome available, then set `AGENT_WORKER_URL` and an optional shared `AGENT_WORKER_TOKEN` in the dashboard environment.
+📌 Repository
 
-### Safety boundaries
+DropSeo 
 
-- Public HTTP/HTTPS targets only; private and link-local networks are rejected.
-- Main-frame navigation stays on the approved domain and its subdomains.
-- Purchases, destructive actions, form submissions, and sensitive fields are blocked.
-- Every run has page, action, and time budgets.
-- Website content is treated as untrusted evidence, never as agent instructions.
+Built around one principle:
 
-### Agent-specific layout
+Don't just score a website. Investigate it.
 
-- `app/page.tsx` — streaming agent workspace and evidence report.
-- `app/api/agent/run/route.ts` — dashboard-to-worker streaming proxy.
-- `agent/worker.mjs` — Playwright executor, planner loop, safeguards, measurements, and evidence storage.
-- `outputs/runs/` — ignored local run reports and screenshots.
+<p align="center">
 
-## Framework notes
+<img src="https://capsule-render.vercel.app/api?type=waving&height=120&section=footer&text=Sitepulse%20Agent&fontSize=28&animation=fadeIn" alt="Sitepulse footer animation" />{=html}
 
-A clean full-stack starter running on [vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and Drizzle support.
+</p>
 
-## Prerequisites
+::: {align="center"}
+Explore. Test. Diagnose. Verify.
 
-- Node.js `>=22.13.0`
-- Windows, macOS, or Linux; Git is required only for publishing, and Bash is not required for initialization or the project commands
-
-## Sites Lifecycle
-
-The bundled Sites initializer copies this starter into the project and runs its locked dependency install before returning the checkout. Edit the source under `app/`, use `npm run dev` for the Codex local preview, and run the project validation before hosting. The remote Sites builder also runs `npm run build` against the pushed commit. Do not rerun the dependency install unless dependencies are absent or the lockfile changed.
-
-This starter does not use `wrangler.jsonc`.
-
-`install:ci` runs `npm ci` once against this checkout's bundled lockfile, explicitly targeting the project and disabling parent-workspace discovery. It includes dev and optional dependencies required for builds and previews even when production/omit settings would exclude them. It defaults Sharp to prebuilt binaries unless the caller explicitly configures Sharp or a source build. It uses `--prefer-offline --no-audit --no-fund`, reuses the configured npm cache, and leaves network concurrency, retries, timeouts, and lifecycle-script policy to npm's configuration. Retain the installer session until it finishes; do not overlap installers for the same checkout.
-
-`scripts/sites-env.mjs` preserves the caller's HOME, npm cache, proxy, XDG, and temporary-directory configuration while defaulting Wrangler and Miniflare state to the checkout. If npm reports an unwritable cache, select a writable path with `npm_config_cache` for that install. The `dev` and `start` scripts also keep Wrangler logs inside the checkout. Generated `.sites-runtime/` and `.wrangler/` directories are disposable and ignored by Git.
-
-`npm run dev` uses `vinext dev` for the live Vite preview with HMR, starting at port 5173. Vinext records the running server in ignored `.vinext/` state and rejects another start for the same checkout while that process is alive; reuse its printed URL. It recovers stale state after a stopped process. Pass `--port <port>` or `--hostname <host>` after `npm run dev --` when needed; keep Codex previews on loopback. Like the Sites package, this relies on Vinext's advisory lock; exactly simultaneous starts can race.
-
-The bundled Sites Vite plugin simulates ChatGPT sign-in only for loopback development requests. Visit `/signin-with-chatgpt?return_to=/` to sign in as `local_seedy` (`seedy@sites.test`, display name `Seedy`) and `/signout-with-chatgpt?return_to=/` to sign out. The development cookie preserves that identity across server restarts. This does not exercise real ChatGPT OAuth and is not included in production builds; hosted authentication remains dispatch-owned.
-
-The Worker uses `vinext/server/fetch-handler`, including Vinext's config-aware image handling. After building, `npm start` runs that Worker locally through Wrangler on `127.0.0.1`, sharing `.wrangler/state` with dev preview and local D1 migrations; it does not deploy the site or simulate sign-in. Use the URL printed by the server. Pass `npm start -- --port <port>` to select a different built-preview port.
-
-Local previews use Miniflare's placeholder `Request.cf` metadata without a network lookup. Set `CLOUDFLARE_CF_FETCH_ENABLED=true` to opt into fetching preview metadata; this setting does not change hosted request metadata.
-
-Local tool usage metrics are disabled by default. Set `WRANGLER_SEND_METRICS=true` to opt in.
-
-## Included Shape
-
-- edit site code under `app/`
-- `app/chatgpt-auth.ts` provides optional dispatch-owned ChatGPT sign-in helpers
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
-- `vite.config.ts` simulates declared bindings for local development
-- `db/index.ts` reads the D1 binding from the Cloudflare Worker environment
-- `db/schema.ts` starts intentionally empty
-- `@cloudflare/workers-types` provides Worker types; `cloudflare-env.d.ts` declares optional `DB`/`BUCKET` bindings—update these declarations if binding names change
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
-
-## Workspace Auth Headers
-
-Signed-in visitors receive both `oai-authenticated-user-id` and `oai-authenticated-user-email`. Private Sites require every visitor to sign in; public Sites may also have anonymous visitors, for whom neither header is present.
-
-The user ID is stable for the same user on the same Site and different across Sites. Use it as the durable user key; use email and name for display or contact purposes.
-
-SIWC-authenticated workspace sites may also receive `oai-authenticated-user-full-name` when the user's SIWC profile has a non-empty `name` claim. The full-name value is percent-encoded UTF-8 and is accompanied by `oai-authenticated-user-full-name-encoding: percent-encoded-utf-8`.
-
-Treat the full name as optional and fall back to email when it is absent:
-
-```tsx
-import { headers } from "next/headers";
-
-export default async function Home() {
-  const requestHeaders = await headers();
-  const userId = requestHeaders.get("oai-authenticated-user-id");
-  const email = requestHeaders.get("oai-authenticated-user-email");
-  const encodedFullName = requestHeaders.get("oai-authenticated-user-full-name");
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get("oai-authenticated-user-full-name-encoding") ===
-      "percent-encoded-utf-8"
-      ? decodeURIComponent(encodedFullName)
-      : null;
-
-  const displayName = fullName ?? email;
-  // ...
-}
-```
-
-## Optional Dispatch-Owned ChatGPT Sign-In
-
-Import the ready-to-use helpers from `app/chatgpt-auth.ts` when the site needs optional or required ChatGPT sign-in:
-
-- Use `getChatGPTUser()` for optional signed-in UI.
-- Use the returned `userId` as the stable user key for user-owned records; do not use email as a durable identifier.
-- Use `requireChatGPTUser(returnTo)` for server-rendered pages that should send anonymous visitors through Sign in with ChatGPT.
-- In a Server Component, start sign-in with `<a href={chatGPTSignInPath(returnTo)} target="_top">`. The auth helper module is server-only; do not import it into a Client Component.
-- Do not use `fetch`, XHR, a client-side router, or a framework link that can prefetch the sign-in route. SIWC must start as a top-level navigation.
-- Never request the AuthAPI authorization endpoint directly. The dispatch-owned `/signin-with-chatgpt` route must start the SIWC flow.
-- Use `chatGPTSignOutPath(returnTo)` for browser sign-out links or actions.
-- Pass a same-origin relative `returnTo` path for the destination after sign-in or sign-out. The helper validates and safely encodes it.
-- Mark protected pages with `export const dynamic = "force-dynamic"` because they depend on per-request identity headers.
-
-Dispatch owns `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`, the OAuth cookies, and identity header injection. Do not implement app routes for those reserved paths. Routes that do not import and call the helper remain anonymous-compatible.
-
-SIWC establishes identity only; it does not prove workspace membership. Use the Sites hosting platform's access policy controls for workspace-wide restrictions, or enforce explicit server-side membership or allowlist checks.
-
-Use SIWC for account pages, user-specific dashboards, saved records, and write actions tied to the current ChatGPT user. Leave public content anonymous.
-
-## Local D1 migrations
-
-For a D1-backed local preview, generate SQL with `npm run db:generate`. Build once through the Sites skill's build entrypoint (or `npm run build` for standalone use) to generate `dist/server/wrangler.json`, rebuilding if bindings change. From the project root, apply each pending migration in order:
-
-```sh
-node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0000_example.sql
-```
-
-Replace the filename with the pending migration and `DB` with your D1 binding name if different. Use `.wrangler/state`, not `.wrangler/state/v3`; Wrangler adds the versioned directories. Do not replay migrations already applied locally. This updates only the preview database; publishing applies production migrations separately.
-
-## Diagnostic Commands
-
-- `npm run install:ci`: perform the one locked dependency install
-- `npm run dev`: start the Vite/Vinext development server
-- `npm run build`: build the deployable Sites artifact
-- `npm run start`: preview the built Worker locally with D1/R2 support
-- `npm run db:generate`: generate Drizzle migrations after schema changes
-
-When using the Sites plugin, follow its skill instructions for installation, builds, and publishing. These npm commands remain available for standalone use.
-
-Like the Sites package, `npm run build` runs `vinext build` directly; it does not require a host `timeout` command.
-
-## Learn More
-
-- [vinext Documentation](https://github.com/cloudflare/vinext)
-- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)
+⭐ If you find the project useful, consider starring the repository.
+:::
