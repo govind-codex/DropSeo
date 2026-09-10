@@ -1,5 +1,3 @@
-import { runAgent } from "../../../../agent/worker.mjs";
-
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
@@ -37,9 +35,9 @@ export async function POST(request: Request) {
     let closed = false;
     const stream = new ReadableStream({
       start(controller) {
-        void runAgent(input, (event: Record<string, unknown>) => {
+        void import("../../../../agent/worker.mjs").then(({ runAgent }) => runAgent(input, (event: Record<string, unknown>) => {
           if (!closed) controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
-        }).then(() => {
+        })).then(() => {
           if (!closed) controller.close();
         }).catch((error: unknown) => {
           if (!closed) {

@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 
 const npm = process.platform === "win32" ? "npm.cmd" : "npm";
 const children = [
-  spawn(process.execPath, ["agent/worker.mjs"], { stdio: "inherit" }),
+  spawn(process.execPath, ["agent/server.mjs"], { stdio: "inherit" }),
   spawn(npm, ["run", "dev:web"], { stdio: "inherit", shell: process.platform === "win32" }),
 ];
 

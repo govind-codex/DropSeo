@@ -10,7 +10,7 @@
     "dev": "next dev",
     "dev:web": "next dev",
     "dev:worker": "node scripts/dev-all.mjs",
-    "agent": "node agent/worker.mjs",
+    "agent": "node agent/server.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
