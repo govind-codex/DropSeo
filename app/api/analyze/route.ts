@@ -1,5 +1,3 @@
-import { env } from "cloudflare:workers";
-
 type AuditCheck = {
   name: string;
   pass: boolean;
@@ -92,7 +90,7 @@ async function getAiAnalysis(input: {
   checks: AuditCheck[];
   metrics: Record<string, number>;
 }): Promise<AiAnalysis> {
-  const apiKey = env.GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("AI analysis is not configured.");
 
   const schema = {
@@ -159,7 +157,7 @@ Make the advice unusually specific and creative, but practical. Rank quick wins 
 AUDIT EVIDENCE:
 ${JSON.stringify(input)}`;
 
-  const model = env.GEMINI_MODEL || process.env.GEMINI_MODEL || "gemini-3.6-flash";
+  const model = process.env.GEMINI_MODEL || "gemini-3.6-flash";
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
     {

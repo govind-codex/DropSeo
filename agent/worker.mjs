@@ -2,6 +2,8 @@ import http from "node:http";
 import dns from "node:dns/promises";
 import fs from "node:fs/promises";
 import path from "node:path";
+import os from "node:os";
+import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import { chromium } from "playwright-core";
 
@@ -22,8 +24,10 @@ function sendJson(res, status, value) {
   res.end(JSON.stringify(value));
 }
 
-function emit(res, event) {
-  if (!res.destroyed) res.write(`${JSON.stringify({ at: new Date().toISOString(), ...event })}\n`);
+function emit(sink, event) {
+  const payload = { at: new Date().toISOString(), ...event };
+  if (typeof sink === "function") return sink(payload);
+  if (!sink.destroyed) sink.write(`${JSON.stringify(payload)}\n`);
 }
 
 async function readBody(req) {
@@ -64,11 +68,30 @@ function allowedNavigation(candidate, origin) {
   } catch { return false; }
 }
 
-async function findChrome() {
+async function findLocalChrome() {
   for (const candidate of CHROME_PATHS) {
     try { await fs.access(candidate); return candidate; } catch {}
   }
   throw new Error("Chrome or Edge was not found. Set CHROME_EXECUTABLE_PATH.");
+}
+
+async function browserLaunchOptions() {
+  if (process.env.VERCEL === "1" || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    const imported = await import("@sparticuz/chromium-min");
+    const serverlessChromium = imported.default || imported;
+    const packUrl = process.env.CHROMIUM_PACK_URL || "https://github.com/Sparticuz/chromium/releases/download/v141.0.0/chromium-v141.0.0-pack.x64.tar";
+    return {
+      executablePath: await serverlessChromium.executablePath(packUrl),
+      headless: true,
+      args: [...serverlessChromium.args, "--no-first-run", "--disable-dev-shm-usage"],
+    };
+  }
+  return { executablePath: await findLocalChrome(), headless: true, args: ["--disable-dev-shm-usage", "--no-first-run"] };
+}
+
+function runOutputDirectory(runId) {
+  const root = process.env.VERCEL === "1" ? path.join(os.tmpdir(), "sitepulse-runs") : path.join(process.cwd(), "outputs", "runs");
+  return runId ? path.join(root, runId) : root;
 }
 
 async function askGemini(prompt, schema, attempts = 2) {
@@ -311,21 +334,21 @@ async function executeDecision(page, decision, observation, origin) {
 
 async function screenshotEvent(page, runId, label) {
   const buffer = await page.screenshot({ type: "jpeg", quality: 55, fullPage: false });
-  const directory = path.join(process.cwd(), "outputs", "runs", runId);
+  const directory = runOutputDirectory(runId);
   await fs.mkdir(directory, { recursive: true });
   const filename = `${String(Date.now())}-${label}.jpg`;
   await fs.writeFile(path.join(directory, filename), buffer);
   return { type: "snapshot", label, url: page.url(), image: `data:image/jpeg;base64,${buffer.toString("base64")}` };
 }
 
-async function runAgent(input, res) {
+export async function runAgent(input, res) {
   const runId = randomUUID();
   const workflow = ["autonomous", "journey", "performance", "verify"].includes(input.workflow) ? input.workflow : "autonomous";
   const goal = String(input.goal || "").slice(0, 500);
   const maxActions = Math.min(14, Math.max(3, Number(input.maxActions) || 10));
   const maxPages = Math.min(6, Math.max(1, Number(input.maxPages) || 4));
   const target = await validatePublicUrl(input.url);
-  const browser = await chromium.launch({ executablePath: await findChrome(), headless: true, args: ["--disable-dev-shm-usage", "--no-first-run"] });
+  const browser = await chromium.launch(await browserLaunchOptions());
   const context = await browser.newContext({ viewport: { width: 1280, height: 760 }, userAgent: "SitepulseAgent/1.0 (+safe autonomous website testing)" });
   const page = await context.newPage();
   const networkFailures = [];
@@ -389,8 +412,8 @@ async function runAgent(input, res) {
     emit(res, await screenshotEvent(page, runId, "final"));
     findings.forEach((finding) => emit(res, { type: "finding", finding }));
     const result = { runId, workflow, goal, status: "completed", profile, outcome: finalOutcome, visitedPages: [...visited], actions: history, performance, findings, safety: { blockedActions: history.filter((item) => item.blocked).length, domainRestricted: true, sensitiveFieldsProtected: true }, durationMs: Date.now() - startedAt };
-    await fs.mkdir(path.join(process.cwd(), "outputs", "runs"), { recursive: true });
-    await fs.writeFile(path.join(process.cwd(), "outputs", "runs", `${runId}.json`), JSON.stringify(result, null, 2));
+    await fs.mkdir(runOutputDirectory(), { recursive: true });
+    await fs.writeFile(path.join(runOutputDirectory(), `${runId}.json`), JSON.stringify(result, null, 2));
     emit(res, { type: "complete", result });
   } finally {
     await context.close().catch(() => {});
@@ -404,7 +427,7 @@ const server = http.createServer(async (req, res) => {
     return res.end();
   }
   if (process.env.AGENT_WORKER_TOKEN && req.headers.authorization !== `Bearer ${process.env.AGENT_WORKER_TOKEN}`) return sendJson(res, 401, { error: "Unauthorized." });
-  if (req.method === "GET" && req.url === "/health") return sendJson(res, 200, { ok: true, browser: Boolean(await findChrome().catch(() => null)), model: process.env.GEMINI_MODEL || "gemini-3.6-flash" });
+  if (req.method === "GET" && req.url === "/health") return sendJson(res, 200, { ok: true, browser: Boolean(await browserLaunchOptions().catch(() => null)), model: process.env.GEMINI_MODEL || "gemini-3.6-flash" });
   if (req.method === "POST" && req.url === "/run") {
     try {
       const input = await readBody(req);
@@ -419,4 +442,5 @@ const server = http.createServer(async (req, res) => {
   return sendJson(res, 404, { error: "Not found." });
 });
 
-server.listen(PORT, "127.0.0.1", () => console.log(`Sitepulse agent worker ready at http://127.0.0.1:${PORT}`));
+const isMainModule = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
+if (isMainModule) server.listen(PORT, "127.0.0.1", () => console.log(`Sitepulse agent worker ready at http://127.0.0.1:${PORT}`));

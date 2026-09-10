@@ -1,7 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  outputFileTracingIncludes: {
+    "/api/agent/run": ["./node_modules/@sparticuz/chromium-min/**/*"],
+  },
+  outputFileTracingExcludes: {
+    "/api/agent/run": ["./outputs/**/*", "./dist/**/*", "./.wrangler/**/*", "./.sites-runtime/**/*"],
+  },
 };
 
 export default nextConfig;

@@ -116,7 +116,7 @@ export default function Home() {
         body: JSON.stringify({ url, workflow: activeWorkflow, goal: activeGoal, maxActions: 10, maxPages: 4 }),
       });
       if (!response.ok || !response.body) {
-        const payload = await response.json().catch(() => ({ error: "Unable to start the browser agent." }));
+        const payload = await response.json().catch(() => ({ error: "Unable to start the browser agent." })) as { error?: string };
         throw new Error(payload.error || "Unable to start the browser agent.");
       }
       const reader = response.body.getReader();
