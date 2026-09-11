@@ -2,7 +2,6 @@ FROM node:22-bookworm-slim
 
 ENV NODE_ENV=production \
     CHROME_EXECUTABLE_PATH=/usr/bin/chromium \
-    WEBCMD_BROWSER_BINARY_PATH=/usr/bin/chromium \
     WEBCMD_WINDOW=background \
     WEBCMD_CONFIG_DIR=/data/webcmd \
     WEBCMD_CACHE_DIR=/data/webcmd-cache \
@@ -14,6 +13,8 @@ RUN apt-get update \
         chromium \
         fonts-liberation \
         fonts-noto-color-emoji \
+        xauth \
+        xvfb \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -29,4 +30,6 @@ USER node
 
 EXPOSE 8788
 
-CMD ["node", "agent/server.mjs"]
+# Webcmd intentionally runs its managed browser in headed mode. Railway has no
+# physical display, so provide an isolated virtual X display for that browser.
+CMD ["xvfb-run", "-a", "-s", "-screen 0 1280x760x24 -nolisten tcp", "node", "agent/server.mjs"]

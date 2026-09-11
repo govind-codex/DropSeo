@@ -56,6 +56,10 @@ Railway supplies `PORT`; do not create it manually. Generate a public domain in
 Railway under **Settings > Networking**. A healthy deployment returns JSON from
 `https://your-worker-domain/health` with `ok: true` and `browser: true`.
 
+The container starts the worker through Xvfb because Webcmd's managed browser
+uses a desktop display even when its window mode is background. No `DISPLAY`
+variable or custom Railway start command is required.
+
 For durable workflow memory, attach a Railway volume at `/data`. The container
 already stores Webcmd configuration, cache, and learned workflows beneath that
 directory. Without a volume, the worker still operates, but this memory resets
