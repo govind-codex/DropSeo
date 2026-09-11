@@ -36,6 +36,41 @@ The hosted API performs deterministic checks against the live HTML response and 
 
 For real browser screenshots in production, deploy `agent/server.mjs` to a Node host with Chrome/Chromium and set `AGENT_WORKER_URL` plus optional `AGENT_WORKER_TOKEN`. The API route streams that worker when configured and otherwise uses portable analysis.
 
+## Deploy the browser worker to Railway
+
+Keep the Next.js application on Vercel and deploy this repository as a second
+Railway service. Railway detects the root `Dockerfile` and uses
+`railway.toml` to check `/health` before routing traffic.
+
+Set these Railway variables:
+
+```env
+GEMINI_API_KEY=your_key
+GEMINI_MODEL=gemini-3.6-flash
+AGENT_WORKER_TOKEN=use_a_long_random_secret
+WEBCMD_ENABLED=true
+WEBCMD_PROFILE=sitepulse
+```
+
+Railway supplies `PORT`; do not create it manually. Generate a public domain in
+Railway under **Settings > Networking**. A healthy deployment returns JSON from
+`https://your-worker-domain/health` with `ok: true` and `browser: true`.
+
+For durable workflow memory, attach a Railway volume at `/data`. The container
+already stores Webcmd configuration, cache, and learned workflows beneath that
+directory. Without a volume, the worker still operates, but this memory resets
+when Railway replaces the container.
+
+Finally, set these variables on the Vercel project and redeploy it:
+
+```env
+AGENT_BROWSER_MODE=external
+AGENT_WORKER_URL=https://your-worker-domain
+AGENT_WORKER_TOKEN=the_same_random_secret
+```
+
+Do not include `/run` in `AGENT_WORKER_URL`; the Vercel API adds that path.
+
 ## Deployment configuration
 
 - `.openai/hosting.json` binds this project to its Sites deployment.

@@ -4,7 +4,8 @@ import { getWebcmdInfo } from "./webcmd/index.mjs";
 
 try { process.loadEnvFile?.(".env.local"); } catch {}
 
-const PORT = Number(process.env.AGENT_WORKER_PORT || 8788);
+const PORT = Number(process.env.PORT || process.env.AGENT_WORKER_PORT || 8788);
+const HOST = process.env.AGENT_WORKER_HOST || "0.0.0.0";
 const MAX_BODY = 64_000;
 
 function sendJson(res, status, value) {
@@ -30,12 +31,16 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(204, { "access-control-allow-origin": "*", "access-control-allow-headers": "content-type,authorization", "access-control-allow-methods": "GET,POST,OPTIONS" });
     return res.end();
   }
-  if (process.env.AGENT_WORKER_TOKEN && req.headers.authorization !== `Bearer ${process.env.AGENT_WORKER_TOKEN}`) return sendJson(res, 401, { error: "Unauthorized." });
+  // Keep readiness public so Railway can verify the deployment. Only /run is
+  // protected by the shared worker token.
   if (req.method === "GET" && req.url === "/health") {
     const [browser, webcmd] = await Promise.all([browserAvailable(), getWebcmdInfo()]);
-    return sendJson(res, 200, { ok: true, browser, webcmd, model: process.env.GEMINI_MODEL || "gemini-3.6-flash" });
+    return sendJson(res, browser ? 200 : 503, { ok: browser, browser, webcmd });
   }
   if (req.method === "POST" && req.url === "/run") {
+    if (process.env.AGENT_WORKER_TOKEN && req.headers.authorization !== `Bearer ${process.env.AGENT_WORKER_TOKEN}`) {
+      return sendJson(res, 401, { error: "Unauthorized." });
+    }
     try {
       const input = await readBody(req);
       res.writeHead(200, { "content-type": "application/x-ndjson", "cache-control": "no-cache, no-transform", "access-control-allow-origin": "*", connection: "keep-alive" });
@@ -49,4 +54,13 @@ const server = http.createServer(async (req, res) => {
   return sendJson(res, 404, { error: "Not found." });
 });
 
-server.listen(PORT, "127.0.0.1", () => console.log(`Sitepulse agent worker ready at http://127.0.0.1:${PORT}`));
+server.listen(PORT, HOST, () => console.log(`Sitepulse agent worker ready at http://${HOST}:${PORT}`));
+
+function shutdown(signal) {
+  console.log(`${signal} received; stopping Sitepulse agent worker.`);
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(1), 10_000).unref();
+}
+
+process.once("SIGTERM", () => shutdown("SIGTERM"));
+process.once("SIGINT", () => shutdown("SIGINT"));
