@@ -28,6 +28,7 @@ type Analysis = {
   images: number;
   scripts: number;
   styles: number;
+  links?: Array<{ url: string; text: string }>;
   ai?: {
     summary?: string;
     verdict?: string;
@@ -98,7 +99,7 @@ function portableAnalysisStream(request: Request, input: AgentInput) {
       };
 
       void (async () => {
-        push({ type: "run", runId, workflow, status: "observing", limits: { maxPages: 1, timeoutSeconds: 55 } });
+        push({ type: "run", runId, workflow, status: "observing", limits: { maxPages: 4, timeoutSeconds: 55 } });
         push({ type: "activity", status: "running", title: "Validating the target", detail: "Confirming this is a public HTTP website." });
         push({ type: "activity", status: "running", title: "Fetching website evidence", detail: String(input.url || "") });
 
@@ -110,30 +111,43 @@ function portableAnalysisStream(request: Request, input: AgentInput) {
         const analysis = await analysisResponse.json() as Analysis;
         if (!analysisResponse.ok) throw new Error(analysis.error || "The website could not be analyzed.");
 
-        push({ type: "activity", status: "complete", title: "Website evidence collected", detail: `${analysis.checks.length} SEO, accessibility and technical checks completed from the live HTML response.` });
-        push({ type: "activity", status: "complete", title: "Technical signals measured", detail: `TTFB ${analysis.ttfb} ms · ${analysis.images} images · ${analysis.scripts} scripts · ${analysis.styles} stylesheets.` });
+        const analyses = [analysis];
+        const pageLinks = selectInvestigationLinks(analysis.links || [], analysis.url, input.goal || "").slice(0, 3);
+        push({ type: "snapshot", image: screenshotUrl(analysis.url), url: analysis.url, source: "rendered-page" });
+        push({ type: "activity", status: "complete", title: "Homepage evidence collected", detail: `${analysis.checks.length} checks completed and a rendered screenshot requested.` });
         push({
           type: "profile",
           profile: {
             siteType: analysis.title || "Public website",
-            purpose: analysis.ai?.summary || `Technical and search audit for ${analysis.url}`,
+            purpose: analysis.ai?.summary || `Multi-page technical, search and accessibility audit for ${analysis.url}`,
             primaryJourney: input.goal || "Find the highest-impact website improvements",
-            plan: ["Fetch the public page", "Inspect search and accessibility signals", "Measure response characteristics", "Use Gemini to prioritize improvements"],
+            plan: ["Capture rendered homepage evidence", "Inspect important same-domain pages", "Compare technical and accessibility signals", "Prioritize verified fixes"],
           },
         });
-        push({ type: "activity", status: analysis.ai ? "complete" : "warning", title: analysis.ai ? "Gemini recommendations prepared" : "Deterministic report prepared", detail: analysis.ai?.verdict || analysis.aiError || "The audit completed without AI enrichment." });
 
-        const findings = analysis.checks.filter((check) => !check.pass).map((check) => ({
-          id: crypto.randomUUID(),
-          category: check.category,
-          severity: check.category === "Technical" ? "high" : "medium",
-          title: check.name,
-          expected: "The page should pass this website-quality check.",
-          observed: check.detail,
-          recommendation: check.fix,
-          confidence: "verified",
-          evidenceType: "html-response",
-        }));
+        for (let index = 0; index < pageLinks.length; index += 1) {
+          const target = pageLinks[index];
+          push({ type: "activity", status: "running", title: `Inspecting page ${index + 2} of ${pageLinks.length + 1}`, detail: target });
+          try {
+            const pageResponse = await analyzeWebsite(new Request(request.url, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ url: target, skipAi: true }),
+            }));
+            const pageAnalysis = await pageResponse.json() as Analysis;
+            if (!pageResponse.ok) throw new Error(pageAnalysis.error || "Page could not be analyzed.");
+            analyses.push(pageAnalysis);
+            push({ type: "snapshot", image: screenshotUrl(pageAnalysis.url), url: pageAnalysis.url, source: "rendered-page" });
+            push({ type: "activity", status: "complete", title: `Page ${index + 2} verified`, detail: `${pageAnalysis.title || pathname(pageAnalysis.url)} · score ${pageAnalysis.score}/100 · ${pageAnalysis.load} ms response.` });
+          } catch (error) {
+            push({ type: "activity", status: "warning", title: `Page ${index + 2} could not be inspected`, detail: error instanceof Error ? error.message : target });
+          }
+        }
+
+        push({ type: "activity", status: "complete", title: "Cross-page signals compared", detail: `${analyses.length * analysis.checks.length} checks across ${analyses.length} pages.` });
+        push({ type: "activity", status: analysis.ai ? "complete" : "warning", title: analysis.ai ? "AI recommendations prepared" : "Verified recommendations prepared", detail: analysis.ai?.verdict || "AI enrichment is unavailable, so the report is prioritized from verified page evidence." });
+
+        const findings = aggregateFindings(analyses);
 
         for (const win of analysis.ai?.quickWins || []) {
           if (findings.some((finding) => finding.title.toLowerCase() === win.title.toLowerCase())) continue;
@@ -151,19 +165,21 @@ function portableAnalysisStream(request: Request, input: AgentInput) {
         }
 
         findings.forEach((finding) => push({ type: "finding", finding }));
+        const averageScore = Math.round(analyses.reduce((sum, item) => sum + item.score, 0) / analyses.length);
+        const highestPriority = findings.find((finding) => finding.severity === "high") || findings[0];
         const result = {
           runId,
           workflow,
           goal: String(input.goal || ""),
           status: "completed",
-          outcome: analysis.ai?.verdict || `Audit completed with a score of ${analysis.score}/100.`,
-          visitedPages: [analysis.url],
-          actions: [{ sequence: 1, action: "fetch", ok: true, url: analysis.url }],
+          outcome: analysis.ai?.verdict || `Audited ${analyses.length} pages with an average score of ${averageScore}/100.${highestPriority ? ` Highest priority: ${highestPriority.title}.` : " No material issues were verified."}`,
+          visitedPages: analyses.map((item) => item.url),
+          actions: analyses.map((item, index) => ({ sequence: index + 1, action: "inspect", ok: true, url: item.url })),
           performance: {
-            ttfb: analysis.ttfb,
-            domContentLoaded: analysis.load,
-            load: analysis.load,
-            resources: analysis.images + analysis.scripts + analysis.styles,
+            ttfb: Math.max(...analyses.map((item) => item.ttfb)),
+            domContentLoaded: Math.max(...analyses.map((item) => item.load)),
+            load: Math.max(...analyses.map((item) => item.load)),
+            resources: analyses.reduce((sum, item) => sum + item.images + item.scripts + item.styles, 0),
             vitals: { lcp: 0, cls: 0, longTasks: 0 },
           },
           findings,
@@ -188,4 +204,70 @@ function streamHeaders() {
     "Cache-Control": "no-cache, no-transform",
     "X-Content-Type-Options": "nosniff",
   };
+}
+
+function screenshotUrl(url: string) {
+  return `https://s.wordpress.com/mshots/v1/${encodeURIComponent(url)}?w=1200`;
+}
+
+function pathname(url: string) {
+  try {
+    return new URL(url).pathname || "/";
+  } catch {
+    return url;
+  }
+}
+
+function selectInvestigationLinks(links: Array<{ url: string; text: string }>, homeUrl: string, goal: string) {
+  const home = new URL(homeUrl);
+  const goalTerms = goal.toLowerCase().split(/\W+/).filter((term) => term.length > 2);
+  const preferred = ["pricing", "product", "service", "feature", "about", "contact", "solution", "case", "blog"];
+  const unique = new Map<string, { url: string; score: number }>();
+
+  for (const link of links) {
+    try {
+      const candidate = new URL(link.url);
+      if (candidate.origin !== home.origin || candidate.href === home.href) continue;
+      if (/\/(?:login|log-in|signin|sign-in|signup|sign-up|account|admin|cart|checkout)(?:\/|$)/i.test(candidate.pathname)) continue;
+      const haystack = `${link.text} ${candidate.pathname}`.toLowerCase();
+      const score = goalTerms.reduce((sum, term) => sum + (haystack.includes(term) ? 8 : 0), 0)
+        + preferred.reduce((sum, term, index) => sum + (haystack.includes(term) ? preferred.length - index : 0), 0)
+        - candidate.pathname.split("/").length;
+      const key = `${candidate.origin}${candidate.pathname}`.replace(/\/$/, "") || candidate.origin;
+      if (!unique.has(key) || unique.get(key)!.score < score) unique.set(key, { url: candidate.href, score });
+    } catch {
+      // Ignore malformed links collected from untrusted markup.
+    }
+  }
+
+  return [...unique.values()].sort((a, b) => b.score - a.score).map((item) => item.url);
+}
+
+function aggregateFindings(analyses: Analysis[]) {
+  const grouped = new Map<string, { check: AuditCheck; failures: Array<{ url: string; detail: string }> }>();
+  for (const analysis of analyses) {
+    for (const check of analysis.checks) {
+      if (check.pass) continue;
+      const group = grouped.get(check.name) || { check, failures: [] };
+      group.failures.push({ url: analysis.url, detail: check.detail });
+      grouped.set(check.name, group);
+    }
+  }
+
+  return [...grouped.values()]
+    .sort((a, b) => {
+      const severity = (item: typeof a) => item.check.category === "Technical" ? 2 : 1;
+      return severity(b) - severity(a) || b.failures.length - a.failures.length;
+    })
+    .map(({ check, failures }) => ({
+      id: crypto.randomUUID(),
+      category: check.category,
+      severity: check.category === "Technical" ? "high" : "medium",
+      title: check.name,
+      expected: `All ${analyses.length} audited pages should pass this check.`,
+      observed: `${failures.length} of ${analyses.length} pages failed: ${failures.map((failure) => `${pathname(failure.url)} — ${failure.detail}`).join("; ")}`,
+      recommendation: `${check.fix} Start with ${pathname(failures[0].url)}${failures.length > 1 ? `, then apply the correction consistently to the other ${failures.length - 1} affected page${failures.length > 2 ? "s" : ""}.` : "."}`,
+      confidence: "verified",
+      evidenceType: "multi-page + screenshot",
+    }));
 }

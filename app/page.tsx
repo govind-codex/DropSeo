@@ -93,13 +93,14 @@ export default function Home() {
   const [result, setResult] = useState<Result | null>(null);
   const [recentRuns, setRecentRuns] = useState<RecentRun[]>([]);
   const [progress, setProgress] = useState(0);
+  const [completionPending, setCompletionPending] = useState(false);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => setRecentRuns(loadRecentRuns()));
     return () => window.cancelAnimationFrame(frame);
   }, []);
 
-  const progressTarget = status === "completed" ? 100 : status === "running" ? Math.min(88, 12 + activities.length * 7) : 0;
+  const progressTarget = completionPending || status === "completed" ? 100 : status === "running" ? Math.min(88, 12 + activities.length * 7) : 0;
 
   useEffect(() => {
     if (progress === progressTarget) return;
@@ -107,11 +108,21 @@ export default function Home() {
       setProgress((current) => {
         const distance = progressTarget - current;
         if (Math.abs(distance) <= 1) return progressTarget;
-        return current + Math.sign(distance) * Math.max(1, Math.ceil(Math.abs(distance) * 0.2));
+        return current + Math.sign(distance) * Math.max(1, Math.ceil(Math.abs(distance) * 0.12));
       });
-    }, 90);
+    }, 120);
     return () => window.clearTimeout(timer);
   }, [progress, progressTarget]);
+
+  useEffect(() => {
+    if (!completionPending || progress < 99 || status !== "running") return;
+    const frame = window.requestAnimationFrame(() => {
+      setProgress(100);
+      setCompletionPending(false);
+      setStatus("completed");
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [completionPending, progress, status]);
 
   async function startRun(event?: React.FormEvent, override?: { workflow: Workflow; goal: string; workflowId?: string }) {
     event?.preventDefault();
@@ -120,6 +131,7 @@ export default function Home() {
     setWorkflow(activeWorkflow);
     setGoal(activeGoal);
     setProgress(0);
+    setCompletionPending(false);
     setStatus("running");
     setError("");
     setActivities([]);
@@ -158,6 +170,7 @@ export default function Home() {
       }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The run failed unexpectedly.");
+      setCompletionPending(false);
       setStatus("error");
     }
   }
@@ -167,11 +180,11 @@ export default function Home() {
     if (event.type === "profile") setProfile(event.profile as Profile);
     if (event.type === "snapshot") { setSnapshot(String(event.image)); setSnapshotUrl(String(event.url)); }
     if (event.type === "finding") setFindings((items) => [...items, event.finding as Finding]);
-    if (event.type === "error") { setError(String(event.error)); setStatus("error"); }
+    if (event.type === "error") { setError(String(event.error)); setCompletionPending(false); setStatus("error"); }
     if (event.type === "complete") {
       const completed = event.result as Result;
       setResult(completed);
-      setStatus("completed");
+      setCompletionPending(true);
       setFindings(completed.findings);
       const completedUrl = completed.visitedPages[0] || normalizeUrl(url);
       setRecentRuns((current) => {

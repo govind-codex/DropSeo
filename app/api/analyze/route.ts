@@ -192,7 +192,7 @@ ${JSON.stringify(input)}`;
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as { url?: string };
+    const body = (await request.json()) as { url?: string; skipAi?: boolean };
     let url = safeUrl(String(body.url || ""));
     const start = Date.now();
     let response: Response | undefined;
@@ -237,6 +237,22 @@ export async function POST(request: Request) {
       offset += chunk.length;
     }
     const html = new TextDecoder().decode(joined);
+    const internalLinks: Array<{ url: string; text: string }> = [];
+    const seenLinks = new Set<string>();
+    for (const match of html.matchAll(/<a\b[^>]*\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))[^>]*>([\s\S]*?)<\/a>/gi)) {
+      const href = match[1] || match[2] || match[3] || "";
+      try {
+        const link = new URL(href, url);
+        link.hash = "";
+        if (link.origin !== url.origin || !["https:", "http:"].includes(link.protocol) || seenLinks.has(link.href)) continue;
+        if (/\.(?:jpg|jpeg|png|gif|webp|svg|pdf|zip|mp4|mp3)(?:$|\?)/i.test(link.pathname)) continue;
+        seenLinks.add(link.href);
+        internalLinks.push({ url: link.href, text: cleanText(match[4] || "").slice(0, 120) });
+        if (internalLinks.length >= 30) break;
+      } catch {
+        // Ignore malformed and non-HTTP links from untrusted page markup.
+      }
+    }
     const tags = html.match(/<meta\b[^>]*>/gi) || [];
     const meta = (name: string) => tags.find((tag) => attribute(tag, "name").toLowerCase() === name || attribute(tag, "property").toLowerCase() === name);
     const title = html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim() || "";
@@ -268,11 +284,13 @@ export async function POST(request: Request) {
 
     let ai: AiAnalysis | null = null;
     let aiError: string | null = null;
-    try {
-      ai = await getAiAnalysis({ url: url.href, title, description, textSample: cleanText(html), checks, metrics });
-    } catch (error) {
-      console.error("AI analysis unavailable", error);
-      aiError = error instanceof Error ? error.message : "AI analysis is temporarily unavailable.";
+    if (!body.skipAi) {
+      try {
+        ai = await getAiAnalysis({ url: url.href, title, description, textSample: cleanText(html), checks, metrics });
+      } catch (error) {
+        console.error("AI analysis unavailable", error);
+        aiError = error instanceof Error ? error.message : "AI analysis is temporarily unavailable.";
+      }
     }
 
     return Response.json({
@@ -287,6 +305,7 @@ export async function POST(request: Request) {
       images: metrics.images,
       scripts: metrics.scripts,
       styles: metrics.stylesheets,
+      links: internalLinks,
       date: new Date().toISOString(),
       ai,
       aiError,
