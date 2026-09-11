@@ -11,12 +11,15 @@
     "dev:web": "next dev",
     "dev:worker": "node scripts/dev-all.mjs",
     "agent": "node agent/server.mjs",
+    "webcmd:doctor": "webcmd doctor -f json",
+    "test": "node --test agent/**/*.test.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
+    "@agentrhq/webcmd": "^0.8.4",
     "@base-ui/react": "^1.7.0",
     "@hookform/resolvers": "^5.7.1",
     "@shadcn/react": "^0.3.0",

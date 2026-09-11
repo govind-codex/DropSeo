@@ -1,5 +1,6 @@
 import http from "node:http";
 import { browserAvailable, runAgent } from "./worker.mjs";
+import { getWebcmdInfo } from "./webcmd/index.mjs";
 
 try { process.loadEnvFile?.(".env.local"); } catch {}
 
@@ -30,7 +31,10 @@ const server = http.createServer(async (req, res) => {
     return res.end();
   }
   if (process.env.AGENT_WORKER_TOKEN && req.headers.authorization !== `Bearer ${process.env.AGENT_WORKER_TOKEN}`) return sendJson(res, 401, { error: "Unauthorized." });
-  if (req.method === "GET" && req.url === "/health") return sendJson(res, 200, { ok: true, browser: await browserAvailable(), model: process.env.GEMINI_MODEL || "gemini-3.6-flash" });
+  if (req.method === "GET" && req.url === "/health") {
+    const [browser, webcmd] = await Promise.all([browserAvailable(), getWebcmdInfo()]);
+    return sendJson(res, 200, { ok: true, browser, webcmd, model: process.env.GEMINI_MODEL || "gemini-3.6-flash" });
+  }
   if (req.method === "POST" && req.url === "/run") {
     try {
       const input = await readBody(req);

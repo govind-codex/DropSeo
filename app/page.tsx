@@ -33,9 +33,9 @@ import {
 
 type Workflow = "autonomous" | "journey" | "performance" | "verify";
 type ActivityItem = { id: string; at: string; status: "running" | "complete" | "warning" | "blocked"; title: string; detail: string };
-type Finding = { id: string; category: string; severity: string; title: string; expected: string; observed: string; recommendation: string; confidence: string; evidenceType: string };
+type Finding = { id: string; category: string; severity: string; title: string; expected: string; observed: string; recommendation: string; confidence: string; evidenceType: string; workflowId?: string };
 type Profile = { siteType: string; purpose: string; primaryJourney: string; plan: string[] };
-type Result = { runId: string; workflow: Workflow; goal: string; outcome: string; visitedPages: string[]; actions: Array<Record<string, unknown>>; performance: { ttfb: number; domContentLoaded: number; load: number; resources: number; vitals: { lcp: number; cls: number; longTasks: number } }; findings: Finding[]; safety: { blockedActions: number }; durationMs: number };
+type Result = { runId: string; workflow: Workflow; goal: string; outcome: string; visitedPages: string[]; actions: Array<Record<string, unknown>>; performance: { ttfb: number; domContentLoaded: number; load: number; resources: number; vitals: { lcp: number; cls: number; longTasks: number } }; findings: Finding[]; browserIntelligence?: { mode: "reused" | "explored" | "playwright-fallback"; regressionDetected: boolean; webcmd: { available: boolean; version: string | null }; workflow: { id: string; name: string; status: string; successRate: number; steps: number } | null }; safety: { blockedActions: number }; durationMs: number };
 type RecentRun = { runId: string; url: string; workflow: Workflow; outcome: string; findings: number; completedAt: string };
 
 function normalizeUrl(value: string) {
@@ -100,7 +100,7 @@ export default function Home() {
 
   const progress = useMemo(() => status === "completed" ? 100 : status === "running" ? Math.min(88, 12 + activities.length * 7) : 0, [status, activities]);
 
-  async function startRun(event?: React.FormEvent, override?: { workflow: Workflow; goal: string }) {
+  async function startRun(event?: React.FormEvent, override?: { workflow: Workflow; goal: string; workflowId?: string }) {
     event?.preventDefault();
     const activeWorkflow = override?.workflow || workflow;
     const activeGoal = override?.goal ?? goal;
@@ -118,7 +118,7 @@ export default function Home() {
       const response = await fetch("/api/agent/run", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ url, workflow: activeWorkflow, goal: activeGoal, maxActions: 10, maxPages: 4 }),
+        body: JSON.stringify({ url, workflow: activeWorkflow, goal: activeGoal, workflowId: override?.workflowId, maxActions: 10, maxPages: 4 }),
       });
       if (!response.ok || !response.body) {
         const payload = await response.json().catch(() => ({ error: "Unable to start the browser agent." })) as { error?: string };
@@ -163,7 +163,7 @@ export default function Home() {
 
   function verifyFinding(finding: Finding) {
     window.scrollTo({ top: 0, behavior: "smooth" });
-    startRun(undefined, { workflow: "verify", goal: `${finding.title}. Expected behavior: ${finding.expected}` });
+    startRun(undefined, { workflow: "verify", goal: `${finding.title}. Expected behavior: ${finding.expected}`, workflowId: finding.workflowId });
   }
 
   function exportReport() {

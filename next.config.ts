@@ -1,8 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* Vercel uses the lightweight serverless analysis route. Playwright remains
-     available to the optional standalone worker and is not bundled here. */
+  /* Keep the CLI package external while the integrated route bundles the
+     Playwright worker; Webcmd runs as a subprocess only where supported. */
+  serverExternalPackages: ["@agentrhq/webcmd"],
 };
 
 export default nextConfig;

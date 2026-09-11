@@ -7,6 +7,7 @@ type AgentInput = {
   url?: string;
   workflow?: "autonomous" | "journey" | "performance" | "verify";
   goal?: string;
+  workflowId?: string;
 };
 
 type AuditCheck = {
@@ -37,12 +38,14 @@ type Analysis = {
 };
 
 export function GET() {
-  return Response.json({ ok: true, service: "sitepulse-agent", runtime: "nodejs", mode: "serverless-analysis" });
+  const mode = process.env.AGENT_BROWSER_MODE === "integrated" ? "integrated-browser" : process.env.AGENT_WORKER_URL ? "external-browser" : "serverless-analysis";
+  return Response.json({ ok: true, service: "sitepulse-agent", runtime: "nodejs", mode });
 }
 
 export async function POST(request: Request) {
   try {
     const payload = await request.text();
+    const input = JSON.parse(payload || "{}") as AgentInput;
     const workerUrl = process.env.AGENT_WORKER_URL?.trim();
     const useExternalBrowser = Boolean(workerUrl) && process.env.AGENT_BROWSER_MODE !== "integrated";
 
@@ -65,7 +68,31 @@ export async function POST(request: Request) {
       return new Response(upstream.body, { headers: streamHeaders() });
     }
 
-    const input = JSON.parse(payload || "{}") as AgentInput;
+    const useIntegratedBrowser = process.env.AGENT_BROWSER_MODE === "integrated";
+    if (useIntegratedBrowser) {
+      // The browser worker is plain ESM shared with the standalone Node service.
+      const { runAgent } = await import("../../../../agent/worker.mjs") as {
+        runAgent: (input: AgentInput, sink: (event: Record<string, unknown>) => void) => Promise<void>;
+      };
+      const encoder = new TextEncoder();
+      let streamClosed = false;
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          const push = (event: Record<string, unknown>) => {
+            if (!streamClosed) controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+          };
+          void runAgent(input, push)
+            .then(() => { if (!streamClosed) { streamClosed = true; controller.close(); } })
+            .catch((error) => {
+              push({ type: "error", at: new Date().toISOString(), error: error instanceof Error ? error.message : "The browser agent failed." });
+              if (!streamClosed) { streamClosed = true; controller.close(); }
+            });
+        },
+        cancel() { streamClosed = true; },
+      });
+      return new Response(stream, { headers: streamHeaders() });
+    }
+
     const startedAt = Date.now();
     const runId = crypto.randomUUID();
     const workflow = input.workflow || "autonomous";
