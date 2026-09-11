@@ -121,8 +121,15 @@ export default function Home() {
         body: JSON.stringify({ url, workflow: activeWorkflow, goal: activeGoal, workflowId: override?.workflowId, maxActions: 10, maxPages: 4 }),
       });
       if (!response.ok || !response.body) {
-        const payload = await response.json().catch(() => ({ error: "Unable to start the browser agent." })) as { error?: string };
-        throw new Error(payload.error || "Unable to start the browser agent.");
+        const raw = await response.text().catch(() => "");
+        let message = "The live analysis service could not start this run.";
+        try {
+          const payload = JSON.parse(raw) as { error?: string };
+          if (payload.error) message = payload.error;
+        } catch {
+          if (response.status) message = `The live analysis service returned HTTP ${response.status}. Please try again.`;
+        }
+        throw new Error(message);
       }
       const reader = response.body.getReader();
       const decoder = new TextDecoder();

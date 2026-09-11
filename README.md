@@ -23,30 +23,25 @@ npm run webcmd:doctor
 ```env
 GEMINI_API_KEY=your_key
 GEMINI_MODEL=gemini-3.6-flash
-AGENT_BROWSER_MODE=integrated
+AGENT_BROWSER_MODE=portable
 ```
 
-With `AGENT_BROWSER_MODE=integrated`, the standard `npm run dev` command streams the full local Playwright + Webcmd browser worker through the Next.js API. `npm run dev:worker` remains available for testing the separate-worker topology, and `npm run agent` starts only that worker.
+`npm run dev` uses the portable live-HTML analyzer. Run `npm run dev:worker` for the full local Playwright + Webcmd browser worker with screenshots and rendered-page evidence. `npm run agent` starts only that worker.
 
-## Deploy to Vercel
+## Deploy to Sites or another serverless host
 
-1. Push this repository to GitHub, GitLab, or Bitbucket.
-2. Import the repository in Vercel. The framework preset is detected as Next.js.
-3. Add `GEMINI_API_KEY` in Project Settings → Environment Variables for Production, Preview, and Development as needed.
-4. Optionally add `GEMINI_MODEL`; the default is `gemini-3.6-flash`.
-5. Deploy. No custom build or output-directory setting is required.
+Add `GEMINI_API_KEY` and optionally `GEMINI_MODEL` to the production environment. The default model is `gemini-3.6-flash`.
 
-The Playwright browser agent runs in a Node.js Vercel Function with streaming enabled and a five-minute duration budget. It downloads a compatible minimal Chromium pack on the first cold start and reuses the extracted binary while the function instance remains warm. Webcmd subprocess execution is disabled on Vercel by default because its local browser runtime is not serverless-friendly; use a dedicated worker for Webcmd or explicitly enable it only on infrastructure that supports subprocess browsers.
+The hosted API performs deterministic checks against the live HTML response and uses Gemini to prioritize that evidence. It does not attempt to start Chromium inside Cloudflare Workers.
 
-If you prefer a dedicated browser service, set `AGENT_WORKER_URL` and optionally `AGENT_WORKER_TOKEN`. The API route automatically proxies to that worker instead of launching Chromium inside Vercel.
+For real browser screenshots in production, deploy `agent/server.mjs` to a Node host with Chrome/Chromium and set `AGENT_WORKER_URL` plus optional `AGENT_WORKER_TOKEN`. The API route streams that worker when configured and otherwise uses portable analysis.
 
 ## Deployment configuration
 
-- `vercel.json` enables Fluid compute and sets function duration budgets.
-- `next.config.ts` traces the browser-agent runtime package into the deployment.
+- `.openai/hosting.json` binds this project to its Sites deployment.
 - `.env.example` documents every supported environment variable without containing secrets.
-- `app/api/agent/run/route.ts` supports both integrated Vercel Chromium and an external worker.
-- `agent/worker.mjs` writes temporary run artifacts to `/tmp` on Vercel because function filesystems are ephemeral.
+- `app/api/agent/run/route.ts` supports portable analysis and an external browser worker.
+- `agent/worker.mjs` writes temporary run artifacts to the operating system's temporary directory.
 - `agent/webcmd/` contains the single safe Webcmd CLI adapter, workflow store, replay executor, and recovery layer.
 
 ## Browser intelligence and memory
