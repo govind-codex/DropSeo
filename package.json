@@ -13,7 +13,8 @@
     "agent": "node agent/server.mjs",
     "webcmd:doctor": "webcmd doctor -f json",
     "test": "node --test agent/**/*.test.mjs",
-    "build": "next build",
+    "build": "vite build",
+    "build:next": "next build",
     "start": "next start",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate"
