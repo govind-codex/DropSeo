@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Activity,
@@ -92,13 +92,26 @@ export default function Home() {
   const [findings, setFindings] = useState<Finding[]>([]);
   const [result, setResult] = useState<Result | null>(null);
   const [recentRuns, setRecentRuns] = useState<RecentRun[]>([]);
+  const [progress, setProgress] = useState(0);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => setRecentRuns(loadRecentRuns()));
     return () => window.cancelAnimationFrame(frame);
   }, []);
 
-  const progress = useMemo(() => status === "completed" ? 100 : status === "running" ? Math.min(88, 12 + activities.length * 7) : 0, [status, activities]);
+  const progressTarget = status === "completed" ? 100 : status === "running" ? Math.min(88, 12 + activities.length * 7) : 0;
+
+  useEffect(() => {
+    if (progress === progressTarget) return;
+    const timer = window.setTimeout(() => {
+      setProgress((current) => {
+        const distance = progressTarget - current;
+        if (Math.abs(distance) <= 1) return progressTarget;
+        return current + Math.sign(distance) * Math.max(1, Math.ceil(Math.abs(distance) * 0.2));
+      });
+    }, 90);
+    return () => window.clearTimeout(timer);
+  }, [progress, progressTarget]);
 
   async function startRun(event?: React.FormEvent, override?: { workflow: Workflow; goal: string; workflowId?: string }) {
     event?.preventDefault();
@@ -106,6 +119,7 @@ export default function Home() {
     const activeGoal = override?.goal ?? goal;
     setWorkflow(activeWorkflow);
     setGoal(activeGoal);
+    setProgress(0);
     setStatus("running");
     setError("");
     setActivities([]);
@@ -211,13 +225,13 @@ export default function Home() {
           <div className="workspace-grid">
             <aside className="plan-panel"><div className="panel-title"><Target size={17} /> Investigation plan</div>{profile ? <><div className="site-profile"><span>{profile.siteType}</span><strong>{profile.primaryJourney}</strong><p>{profile.purpose}</p></div><ol className="plan-list">{profile.plan.map((step, index) => <li key={step} className={index < Math.max(1, Math.ceil(activities.length / 3)) ? "done" : ""}><span>{index < Math.max(1, Math.ceil(activities.length / 3)) ? <Check /> : index + 1}</span>{step}</li>)}</ol></> : <div className="empty-panel"><Bot /><strong>{status === "running" ? "Reading the website…" : "Waiting for a mission"}</strong><p>The adaptive plan will appear after the agent understands the site.</p></div>}<div className="guardrails"><ShieldCheck /><div><strong>Guardrails active</strong><p>Same-domain navigation, sensitive-field protection and consequential-action blocking.</p></div></div></aside>
 
-            <section className="browser-panel"><div className="browser-chrome"><div className="browser-dots"><i /><i /><i /></div><div className="address"><LockKeyhole size={12} />{snapshotUrl || "Browser evidence will appear here"}</div><span>LIVE</span></div><div className="viewport">{snapshot ? <img src={snapshot} alt={`Browser evidence captured at ${snapshotUrl}`} /> : <div className="viewport-empty"><Eye /><strong>Real browser evidence</strong><p>Launch the agent to watch its latest viewport.</p></div>}<div className="scan-line" /></div><div className="evidence-footer"><span><Eye size={14} /> Latest visual evidence</span><span>{snapshot ? "Screenshot captured" : "No evidence yet"}</span></div></section>
+            <section className="browser-panel"><div className="browser-chrome"><div className="browser-dots"><i /><i /><i /></div><div className="address"><LockKeyhole size={12} />{snapshotUrl || "Evidence will appear here"}</div><span>LIVE</span></div><div className="viewport">{snapshot ? <img src={snapshot} alt={`Browser evidence captured at ${snapshotUrl}`} /> : <div className="viewport-empty"><Eye /><strong>Verified page evidence</strong><p>Screenshots appear when a browser worker is connected; live HTML evidence appears in the report below.</p></div>}<div className="scan-line" /></div><div className="evidence-footer"><span><Eye size={14} /> Latest evidence</span><span>{snapshot ? "Screenshot captured" : status === "completed" ? "HTML evidence captured" : "Waiting for evidence"}</span></div></section>
 
             <aside className="activity-panel"><div className="panel-title"><Activity size={17} /> Agent activity <span>{activities.length}</span></div><div className="activity-feed">{activities.length ? activities.map((item, index) => <article key={item.id}><span className={`activity-icon ${item.status}`}>{item.status === "complete" ? <Check /> : item.status === "running" ? <Loader2 className="spin" /> : item.status === "blocked" ? <CircleStop /> : <AlertTriangle />}</span><div><strong>{item.title}</strong><p>{item.detail}</p><small>Step {index + 1}</small></div></article>) : <div className="empty-panel compact"><Zap /><strong>Observe → plan → act</strong><p>Concise actions and observations appear here without exposing private chain-of-thought.</p></div>}</div></aside>
           </div>
         </section>
 
-        {(status === "completed" || findings.length > 0) && <section className="results"><div className="results-heading"><div><span className="eyebrow"><Search size={13} /> EVIDENCE-BACKED REPORT</span><h2>{result?.outcome || "Findings collected during the run"}</h2><p>{result ? `${result.visitedPages.length} pages · ${result.actions.length} browser actions · ${(result.durationMs / 1000).toFixed(1)} seconds` : "Findings appear as they are verified."}</p></div>{result && <button className="export-button" onClick={exportReport}><Download /> Export evidence report</button>}</div>
+        {(status === "completed" || findings.length > 0) && <section className="results"><div className="results-heading"><div><span className="eyebrow"><Search size={13} /> EVIDENCE-BACKED REPORT</span><h2>{result?.outcome || "Findings collected during the run"}</h2><p>{result ? `${result.visitedPages.length} pages · ${result.actions.length} evidence actions · ${(result.durationMs / 1000).toFixed(1)} seconds` : "Findings appear as they are verified."}</p></div>{result && <button className="export-button" onClick={exportReport}><Download /> Export evidence report</button>}</div>
           {result && <div className="metric-grid"><Metric icon={<Gauge />} label="LCP observed" value={result.performance.vitals.lcp ? `${(result.performance.vitals.lcp / 1000).toFixed(2)}s` : "—"} /><Metric icon={<Zap />} label="Response start" value={`${(result.performance.ttfb / 1000).toFixed(2)}s`} /><Metric icon={<FileSearch />} label="Resources" value={String(result.performance.resources)} /><Metric icon={<ShieldCheck />} label="Blocked actions" value={String(result.safety.blockedActions)} /></div>}
           <div className="findings-list">{findings.length ? findings.map((finding) => <article className="finding-card" key={finding.id}><div className="finding-severity"><span className={finding.severity}>{finding.severity}</span><small>{finding.category} · {finding.confidence}</small></div><div className="finding-body"><h3>{finding.title}</h3><div className="expect-grid"><div><span>EXPECTED</span><p>{finding.expected}</p></div><div><span>OBSERVED</span><p>{finding.observed}</p></div></div><div className="fix"><FlaskConical /><div><span>RECOMMENDED FIX</span><p>{finding.recommendation}</p></div></div></div><div className="finding-actions"><span><Eye /> {finding.evidenceType}</span><button onClick={() => verifyFinding(finding)}><RefreshCw /> Verify fix</button></div></article>) : <div className="no-findings"><Check /><strong>No material issues were verified in this bounded run.</strong></div>}</div>
         </section>}
