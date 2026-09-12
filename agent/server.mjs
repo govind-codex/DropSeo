@@ -34,7 +34,11 @@ const server = http.createServer(async (req, res) => {
   // Keep readiness public so Railway can verify the deployment. Only /run is
   // protected by the shared worker token.
   if (req.method === "GET" && req.url === "/health") {
-    const [browser, webcmd] = await Promise.all([browserAvailable(), getWebcmdInfo()]);
+    const webcmdEnabled = process.env.WEBCMD_ENABLED !== "false";
+    const [browser, webcmd] = await Promise.all([
+      browserAvailable(),
+      webcmdEnabled ? getWebcmdInfo() : Promise.resolve({ available: false, version: null, reason: "Disabled by WEBCMD_ENABLED." }),
+    ]);
     return sendJson(res, browser ? 200 : 503, { ok: browser, browser, webcmd });
   }
   if (req.method === "POST" && req.url === "/run") {
