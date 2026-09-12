@@ -26,7 +26,9 @@ GEMINI_MODEL=gemini-3.6-flash
 AGENT_BROWSER_MODE=portable
 ```
 
-`npm run dev` uses the portable live-HTML analyzer. Run `npm run dev:worker` for the full local Playwright + Webcmd browser worker with screenshots and rendered-page evidence. `npm run agent` starts only that worker.
+`npm run dev` starts both the Next.js application and the full local Playwright +
+Webcmd browser worker with screenshots and rendered-page evidence. `npm run
+dev:web` starts only Next.js, while `npm run agent` starts only the worker.
 
 ## Deploy to Sites or another serverless host
 
@@ -56,10 +58,11 @@ Railway supplies `PORT`; do not create it manually. Generate a public domain in
 Railway under **Settings > Networking**. A healthy deployment returns JSON from
 `https://your-worker-domain/health` with `ok: true` and `browser: true`.
 
-The container starts Xvfb in the background because Webcmd's managed browser
-uses a desktop display even when its window mode is background, then starts the
-HTTP worker directly. No `DISPLAY` variable or custom Railway start command is
-required.
+The production container starts the HTTP worker directly and defaults to the
+Playwright browser engine. Webcmd remains enabled for local development; it is
+disabled in the Railway container because its additional headed browser is not
+stable on small container instances. Railway's start command is committed in
+`railway.toml`, so no custom dashboard start command is required.
 
 For durable workflow memory, attach a Railway volume at `/data`. The container
 already stores Webcmd configuration, cache, and learned workflows beneath that

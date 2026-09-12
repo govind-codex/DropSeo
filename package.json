@@ -7,7 +7,7 @@
   },
   "scripts": {
     "install:ci": "node scripts/install-ci.mjs",
-    "dev": "next dev",
+    "dev": "node scripts/dev-all.mjs",
     "dev:web": "next dev",
     "dev:worker": "node scripts/dev-all.mjs",
     "agent": "node agent/server.mjs",
