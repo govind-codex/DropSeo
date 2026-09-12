@@ -1,6 +1,6 @@
 import http from "node:http";
 import { browserAvailable, runAgent } from "./worker.mjs";
-import { getWebcmdInfo } from "./webcmd/index.mjs";
+import { getWebcmdInfo, webcmdRuntimeEnabled } from "./webcmd/index.mjs";
 
 try { process.loadEnvFile?.(".env.local"); } catch {}
 
@@ -34,7 +34,7 @@ const server = http.createServer(async (req, res) => {
   // Keep readiness public so Railway can verify the deployment. Only /run is
   // protected by the shared worker token.
   if (req.method === "GET" && req.url === "/health") {
-    const webcmdEnabled = process.env.WEBCMD_ENABLED !== "false";
+    const webcmdEnabled = webcmdRuntimeEnabled();
     const [browser, webcmd] = await Promise.all([
       browserAvailable(),
       webcmdEnabled ? getWebcmdInfo() : Promise.resolve({ available: false, version: null, reason: "Disabled by WEBCMD_ENABLED." }),

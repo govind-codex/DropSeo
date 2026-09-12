@@ -14,6 +14,7 @@ import {
   rememberWorkflowInWebcmd,
   saveWorkflow,
   validateWorkflow,
+  webcmdRuntimeEnabled,
 } from "./webcmd/index.mjs";
 
 const CHROME_PATHS = [
@@ -78,6 +79,15 @@ async function browserLaunchOptions() {
     };
   }
   return { executablePath: await findLocalChrome(), headless: true, args: ["--disable-dev-shm-usage", "--no-first-run"] };
+}
+
+function browserSessionClosed(error, page) {
+  return page?.isClosed?.() || /target page, context or browser has been closed|browser has disconnected/i.test(error instanceof Error ? error.message : String(error || ""));
+}
+
+function safePageUrl(page, fallback) {
+  try { return page.isClosed() ? fallback : page.url(); }
+  catch { return fallback; }
 }
 export async function browserAvailable() {
   return Boolean(await browserLaunchOptions().catch(() => null));
@@ -446,7 +456,7 @@ export async function runAgent(input, res) {
   const target = await validatePublicUrl(input.url);
   const requestedWorkflowId = String(input.workflowId || "").slice(0, 100);
   const previousRun = await previousRunForDomain(target.hostname);
-  const webcmdEnabled = process.env.WEBCMD_ENABLED !== "false" && (process.env.VERCEL !== "1" || process.env.WEBCMD_ENABLE_SERVERLESS === "true");
+  const webcmdEnabled = webcmdRuntimeEnabled() && (process.env.VERCEL !== "1" || process.env.WEBCMD_ENABLE_SERVERLESS === "true");
   const webcmdInfo = webcmdEnabled ? await getWebcmdInfo() : { available: false, version: null, reason: "Disabled by WEBCMD_ENABLED." };
   let knownWorkflow = requestedWorkflowId ? await getWorkflow(target.hostname, requestedWorkflowId) : await findWorkflow(target.hostname, goal, workflow);
   let webcmdExecution = null;
@@ -464,6 +474,7 @@ export async function runAgent(input, res) {
   let profile;
   let observation;
   let performance;
+  let pageSessionEnded = false;
   let finalOutcome = "The agent completed its bounded investigation.";
 
   page.on("dialog", (dialog) => dialog.dismiss().catch(() => {}));
@@ -537,18 +548,43 @@ export async function runAgent(input, res) {
       emit(res, { type: "activity", status: "running", title: decision.rationale || `Executing ${decision.action}`, detail: decision.action });
       const plannedElement = observation.elements.find((item) => item.id === decision.elementId);
       let result;
-      try { result = await executeDecision(page, decision, observation, target.origin); } catch (error) { result = { ok: false, changed: false, message: error instanceof Error ? error.message : "The action failed." }; }
-      history.push({ sequence: index + 1, action: decision.action, rationale: decision.rationale, elementText: result.elementText || "", target: plannedElement?.target, value: decision.action === "type" ? decision.text : undefined, url: page.url(), ...result });
+      try {
+        result = await executeDecision(page, decision, observation, target.origin);
+      } catch (error) {
+        result = { ok: false, changed: false, sessionClosed: browserSessionClosed(error, page), message: error instanceof Error ? error.message : "The action failed." };
+      }
+      const currentUrl = safePageUrl(page, observation.url || target.href);
+      history.push({ sequence: index + 1, action: decision.action, rationale: decision.rationale, elementText: result.elementText || "", target: plannedElement?.target, value: decision.action === "type" ? decision.text : undefined, url: currentUrl, ...result });
       emit(res, { type: "activity", status: result.ok ? (result.changed ? "complete" : "warning") : (result.blocked ? "blocked" : "warning"), title: result.ok ? "Action evaluated" : result.blocked ? "Unsafe action prevented" : "Action failed — replanning", detail: result.message });
       if (!result.ok && !result.blocked) emit(res, { type: "activity", status: "running", title: "Recovering from unexpected state", detail: "Refreshing the page model and looking for another route." });
       if (result.blocked) finalOutcome = "The agent safely stopped before a consequential action.";
-      visited.add(page.url());
-      observation = await observePage(page, `sp-${runId.slice(0, 6)}-${index + 1}`);
-      if (index === 1 || !result.ok) emit(res, await screenshotEvent(page, runId, `step-${index + 1}`));
+      visited.add(currentUrl);
+      if (result.sessionClosed) {
+        pageSessionEnded = true;
+        finalOutcome = "The browser session ended after evidence was collected; the available evidence was preserved and analyzed.";
+        emit(res, { type: "activity", status: "warning", title: "Browser session ended early", detail: "Continuing with the evidence already collected instead of interrupting the report." });
+        break;
+      }
+      try {
+        observation = await observePage(page, `sp-${runId.slice(0, 6)}-${index + 1}`);
+        if (index === 1 || !result.ok) emit(res, await screenshotEvent(page, runId, `step-${index + 1}`));
+      } catch (error) {
+        if (!browserSessionClosed(error, page)) throw error;
+        pageSessionEnded = true;
+        finalOutcome = "The browser session ended after evidence was collected; the available evidence was preserved and analyzed.";
+        emit(res, { type: "activity", status: "warning", title: "Browser session ended early", detail: "Continuing with the evidence already collected instead of interrupting the report." });
+        break;
+      }
       if (decision.goalSatisfied) { finalOutcome = decision.outcome || "The requested goal was satisfied."; break; }
     }
 
-    performance = await collectPerformance(page);
+    if (!pageSessionEnded) {
+      try { performance = await collectPerformance(page); }
+      catch (error) {
+        if (!browserSessionClosed(error, page)) throw error;
+        pageSessionEnded = true;
+      }
+    }
     const findings = baseFindings(observation, performance, networkFailures, consoleErrors);
     const metricRegressions = deterministicRegressions(previousRun, observation, performance);
     findings.unshift(...metricRegressions.map((item) => item.finding));
@@ -575,10 +611,13 @@ export async function runAgent(input, res) {
     findings.sort((a, b) => (priorities.get(a.id)?.rank ?? 999) - (priorities.get(b.id)?.rank ?? 999));
     if (["autonomous", "performance"].includes(workflow) || finalOutcome === "The agent completed its bounded investigation.") finalOutcome = diagnosis.summary;
     emit(res, { type: "activity", status: "complete", title: "Analysis prioritized", detail: diagnosis.summary });
-    if (!webcmdExecution?.passed) emit(res, await screenshotEvent(page, runId, "final"));
+    if (!webcmdExecution?.passed && !pageSessionEnded && !page.isClosed()) {
+      try { emit(res, await screenshotEvent(page, runId, "final")); }
+      catch (error) { if (!browserSessionClosed(error, page)) throw error; }
+    }
     if (learnedWorkflow) findings.forEach((finding) => { finding.workflowId = learnedWorkflow.id; });
     findings.forEach((finding) => emit(res, { type: "finding", finding }));
-    const result = { runId, workflow, goal, status: "completed", completedAt: new Date().toISOString(), profile, outcome: finalOutcome, diagnosis, visitedPages: [...visited], actions: history, performance, auditSnapshot: { titlePresent: Boolean(observation.title), metaDescriptionPresent: Boolean(observation.description), canonicalPresent: Boolean(observation.canonical), h1Count: observation.headings.filter((item) => item.level === "H1").length }, regressions: { workflow: regressionDetected, metrics: metricRegressions.map((item) => ({ metric: item.metric, previous: item.previous, current: item.current })) }, findings, browserIntelligence: { webcmd: webcmdInfo, mode: webcmdExecution?.passed ? "reused" : webcmdExploration ? "explored" : "playwright-fallback", workflow: learnedWorkflow ? { id: learnedWorkflow.id, name: learnedWorkflow.name, status: learnedWorkflow.status, successRate: learnedWorkflow.successRate, steps: learnedWorkflow.steps.length } : null, regressionDetected: regressionDetected || metricRegressions.length > 0 }, safety: { blockedActions: history.filter((item) => item.blocked).length, domainRestricted: true, sensitiveFieldsProtected: true, consequentialActionsProhibited: true }, durationMs: Date.now() - startedAt };
+    const result = { runId, workflow, goal, status: "completed", completedAt: new Date().toISOString(), profile, outcome: finalOutcome, diagnosis, visitedPages: [...visited], actions: history, performance, auditSnapshot: { titlePresent: Boolean(observation.title), metaDescriptionPresent: Boolean(observation.description), canonicalPresent: Boolean(observation.canonical), h1Count: observation.headings.filter((item) => item.level === "H1").length }, regressions: { workflow: regressionDetected, metrics: metricRegressions.map((item) => ({ metric: item.metric, previous: item.previous, current: item.current })) }, findings, browserIntelligence: { webcmd: webcmdInfo, mode: webcmdExecution?.passed ? "reused" : webcmdExploration ? "explored" : "playwright-fallback", workflow: learnedWorkflow ? { id: learnedWorkflow.id, name: learnedWorkflow.name, status: learnedWorkflow.status, successRate: learnedWorkflow.successRate, steps: learnedWorkflow.steps.length } : null, regressionDetected: regressionDetected || metricRegressions.length > 0, partialEvidence: pageSessionEnded }, safety: { blockedActions: history.filter((item) => item.blocked).length, domainRestricted: true, sensitiveFieldsProtected: true, consequentialActionsProhibited: true }, durationMs: Date.now() - startedAt };
     await fs.mkdir(runOutputDirectory(), { recursive: true });
     await fs.writeFile(path.join(runOutputDirectory(), `${runId}.json`), JSON.stringify(result, null, 2));
     emit(res, { type: "complete", result });
