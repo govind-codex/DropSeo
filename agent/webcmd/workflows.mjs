@@ -9,7 +9,7 @@ const domainWrites = new Map();
 
 function memoryDirectory() {
   if (process.env.WEBCMD_WORKFLOW_DIR) return path.resolve(process.env.WEBCMD_WORKFLOW_DIR);
-  const base = process.env.VERCEL === "1" ? path.join(os.tmpdir(), "sitepulse") : path.join(process.cwd(), "outputs");
+  const base = process.env.VERCEL === "1" ? path.join(os.tmpdir(), "dropseo") : path.join(process.cwd(), "outputs");
   return path.join(base, "workflows");
 }
 
@@ -106,7 +106,7 @@ export function learnWorkflow({ domain, goal, runType, startUrl, history, versio
     updatedAt: now,
     lastValidatedAt: existing?.lastValidatedAt,
     lastResult: existing?.lastResult,
-    webcmd: { provider: "webcmd", mode: "browser-run", version, profile: process.env.WEBCMD_PROFILE || "sitepulse" },
+    webcmd: { provider: "webcmd", mode: "browser-run", version, profile: process.env.WEBCMD_PROFILE || "dropseo" },
   };
 }
 
@@ -131,10 +131,10 @@ export async function recordWorkflowResult(workflow, result) {
 
 export async function rememberWorkflowInWebcmd(workflow) {
   const summary = [
-    `## Sitepulse learned workflow: ${workflow.name}`,
+    `## DropSeo learned workflow: ${workflow.name}`,
     `Goal: ${workflow.goal || workflow.runType}`,
     `Workflow ID: ${workflow.id}`,
     ...workflow.steps.map((step, index) => `${index + 1}. ${step.description}${step.expectedOutcome ? ` — expected: ${step.expectedOutcome}` : ""}`),
   ].join("\n").slice(0, 4_000);
-  return runWebcmdCommand(["site", "note", "add", workflow.domain, "--text", summary, "--author", "sitepulse", "-f", "json"], { timeoutMs: 12_000 });
+  return runWebcmdCommand(["site", "note", "add", workflow.domain, "--text", summary, "--author", "dropseo", "-f", "json"], { timeoutMs: 12_000 });
 }

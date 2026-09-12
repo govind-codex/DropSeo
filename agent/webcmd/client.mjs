@@ -92,7 +92,7 @@ export async function getWebcmdInfo() {
 }
 
 export async function withWebcmdSession(name, task, options = {}) {
-  const profile = options.profile || process.env.WEBCMD_PROFILE || "sitepulse";
+  const profile = options.profile || process.env.WEBCMD_PROFILE || "dropseo";
   await runWebcmdCommand(["--profile", profile, "profile", "create", profile, "-f", "json"], { timeoutMs: 15_000 }).catch(() => null);
   const created = await runWebcmdCommand(["--profile", profile, "session", "create", name, "-f", "json"], { timeoutMs: 20_000 });
   const sessionId = created?.id;
@@ -106,7 +106,7 @@ export async function withWebcmdSession(name, task, options = {}) {
 
 export async function runBrowserProgram(program, options = {}) {
   if (typeof program !== "string" || program.length > 250_000) throw new TypeError("Webcmd browser programs must be bounded strings.");
-  const response = await withWebcmdSession(options.name || `sitepulse-${Date.now().toString(36)}`, ({ profile, sessionId }) => runWebcmdCommand([
+  const response = await withWebcmdSession(options.name || `dropseo-${Date.now().toString(36)}`, ({ profile, sessionId }) => runWebcmdCommand([
     "--profile", profile,
     "--session", sessionId,
     "browser", "run",

@@ -7,7 +7,7 @@ import { executeWorkflow } from "./executor.mjs";
 import { findWorkflow, learnWorkflow, listWorkflows, recordWorkflowResult, saveWorkflow } from "./workflows.mjs";
 
 test("learns, finds, and records workflow regressions", async () => {
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "sitepulse-workflows-"));
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "dropseo-workflows-"));
   const previousDirectory = process.env.WEBCMD_WORKFLOW_DIR;
   process.env.WEBCMD_WORKFLOW_DIR = directory;
   try {

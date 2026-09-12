@@ -65,7 +65,10 @@ function hostnameFor(value: string) {
 function loadRecentRuns(): RecentRun[] {
   if (typeof window === "undefined") return [];
   try {
-    const stored = JSON.parse(localStorage.getItem("sitepulse-runs") || "[]");
+    const currentRuns = localStorage.getItem("dropseo-runs");
+    const legacyRuns = localStorage.getItem("sitepulse-runs");
+    const stored = JSON.parse(currentRuns || legacyRuns || "[]");
+    if (!currentRuns && legacyRuns) localStorage.setItem("dropseo-runs", legacyRuns);
     return Array.isArray(stored) ? stored : [];
   } catch {
     return [];
@@ -189,7 +192,7 @@ export default function Home() {
       const completedUrl = completed.visitedPages[0] || normalizeUrl(url);
       setRecentRuns((current) => {
         const next: RecentRun[] = [{ runId: completed.runId, url: completedUrl, workflow: completed.workflow, outcome: completed.outcome, findings: completed.findings.length, completedAt: new Date().toISOString() }, ...current].slice(0, 5);
-        localStorage.setItem("sitepulse-runs", JSON.stringify(next));
+        localStorage.setItem("dropseo-runs", JSON.stringify(next));
         return next;
       });
     }
@@ -205,7 +208,7 @@ export default function Home() {
     const blob = new Blob([JSON.stringify({ ...result, profile }, null, 2)], { type: "application/json" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `sitepulse-agent-${result.runId.slice(0, 8)}.json`;
+    link.download = `dropseo-agent-${result.runId.slice(0, 8)}.json`;
     link.click();
     URL.revokeObjectURL(link.href);
   }
@@ -213,10 +216,10 @@ export default function Home() {
   return (
     <div className="agent-app">
       <header className="topbar">
-        <Link className="brand" href="/" aria-label="Sitepulse home"><span className="brand-mark"><Activity size={21} /></span>sitepulse<span>.</span></Link>
+        <Link className="brand" href="/" aria-label="DropSeo home"><span className="brand-mark"><Activity size={21} /></span>DropSeo<span>.</span></Link>
         <div className="product-name"><Bot size={15} /> Agent workspace</div>
         <div className="safe-badge"><ShieldCheck size={15} /> Safe mode enforced</div>
-        <div className="avatar">SP</div>
+        <div className="avatar">DS</div>
       </header>
 
       <main className="agent-main">
@@ -251,7 +254,7 @@ export default function Home() {
 
         {recentRuns.length > 0 && <section className="history-section"><div className="results-heading"><div><span className="eyebrow"><History size={13} /> WEBSITE MEMORY</span><h2>Recent investigations</h2></div></div><div className="history-list">{recentRuns.map((run) => <article key={run.runId}><span className="history-icon"><Globe2 /></span><div><strong>{hostnameFor(run.url || "")}</strong><p>{run.outcome}</p></div><span>{run.workflow}</span><b>{run.findings} findings</b><small>{new Date(run.completedAt).toLocaleString()}</small><ChevronRight /></article>)}</div></section>}
       </main>
-      <footer className="agent-footer"><span><Activity /> Sitepulse Agent</span><p>Bounded autonomy · Evidence before claims · Consequential actions blocked</p></footer>
+      <footer className="agent-footer"><span><Activity /> DropSeo Agent</span><p>Bounded autonomy · Evidence before claims · Consequential actions blocked</p></footer>
     </div>
   );
 }

@@ -1,6 +1,6 @@
-# Sitepulse Agent
+# DropSeo Agent
 
-Sitepulse is a bounded autonomous browser agent for website investigation. It runs real browser sessions, uses Webcmd for exploration and learned workflow replay, keeps Playwright for evidence and deterministic execution, uses Gemini for adaptive planning, performs deterministic SEO/accessibility/performance checks, and blocks consequential actions.
+DropSeo is a bounded autonomous browser agent for website investigation. It runs real browser sessions, uses Webcmd for exploration and learned workflow replay, keeps Playwright for evidence and deterministic execution, uses Gemini for adaptive planning, performs deterministic SEO/accessibility/performance checks, and blocks consequential actions.
 
 ## Local development
 
@@ -51,7 +51,7 @@ GEMINI_API_KEY=your_key
 GEMINI_MODEL=gemini-3.6-flash
 AGENT_WORKER_TOKEN=use_a_long_random_secret
 WEBCMD_ENABLED=true
-WEBCMD_PROFILE=sitepulse
+WEBCMD_PROFILE=dropseo
 ```
 
 Railway supplies `PORT`; do not create it manually. Generate a public domain in

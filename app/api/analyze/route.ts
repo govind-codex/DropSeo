@@ -149,7 +149,7 @@ async function getAiAnalysis(input: {
     required: ["summary", "verdict", "quickWins", "searchUpgrade", "performanceStory", "growthExperiment", "confidence"],
   };
 
-  const prompt = `You are Sitepulse's senior technical SEO and web performance strategist.
+  const prompt = `You are DropSeo's senior technical SEO and web performance strategist.
 Analyze only the supplied evidence. Never invent analytics, rankings, traffic, Core Web Vitals, business facts, or user intent. Clearly frame resource-based performance observations as hypotheses because this is a server-side HTML snapshot, not a rendered browser trace.
 
 Make the advice unusually specific and creative, but practical. Rank quick wins by likely organic-search or user-experience value. Suggested copy must accurately reflect the page content. Avoid generic advice such as "improve your SEO". Use plain English and concise sentences.
@@ -201,7 +201,7 @@ export async function POST(request: Request) {
       response = await fetch(url.href, {
         redirect: "manual",
         signal: AbortSignal.timeout(15000),
-        headers: { "User-Agent": "SitepulseAudit/2.0", Accept: "text/html" },
+        headers: { "User-Agent": "DropSeoAudit/2.0", Accept: "text/html" },
       });
       if (response.status >= 300 && response.status < 400 && response.headers.get("location")) {
         url = safeUrl(new URL(response.headers.get("location")!, url).href);

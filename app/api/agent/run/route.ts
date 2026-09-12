@@ -42,7 +42,7 @@ export function GET() {
   const useExternalBrowser = Boolean(process.env.AGENT_WORKER_URL) && process.env.AGENT_BROWSER_MODE !== "portable";
   return Response.json({
     ok: true,
-    service: "sitepulse-agent",
+    service: "dropseo-agent",
     mode: useExternalBrowser ? "external-browser" : "portable-analysis",
   });
 }

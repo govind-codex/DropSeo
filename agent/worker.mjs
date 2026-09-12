@@ -94,7 +94,7 @@ export async function browserAvailable() {
 }
 
 function runOutputDirectory(runId) {
-  const root = process.env.VERCEL === "1" ? path.join(os.tmpdir(), "sitepulse-runs") : path.join(process.cwd(), "outputs", "runs");
+  const root = process.env.VERCEL === "1" ? path.join(os.tmpdir(), "dropseo-runs") : path.join(process.cwd(), "outputs", "runs");
   return runId ? path.join(root, runId) : root;
 }
 
@@ -171,24 +171,24 @@ const diagnosisSchema = {
 
 async function installMeasurements(page) {
   await page.addInitScript(() => {
-    window.__sitepulseVitals = { lcp: 0, cls: 0, longTasks: 0 };
+    window.__dropseoVitals = { lcp: 0, cls: 0, longTasks: 0 };
     try {
       new PerformanceObserver((list) => {
         const entries = list.getEntries();
         const last = entries[entries.length - 1];
-        if (last) window.__sitepulseVitals.lcp = Math.round(last.startTime);
+        if (last) window.__dropseoVitals.lcp = Math.round(last.startTime);
       }).observe({ type: "largest-contentful-paint", buffered: true });
       new PerformanceObserver((list) => {
-        for (const entry of list.getEntries()) if (!entry.hadRecentInput) window.__sitepulseVitals.cls += entry.value;
+        for (const entry of list.getEntries()) if (!entry.hadRecentInput) window.__dropseoVitals.cls += entry.value;
       }).observe({ type: "layout-shift", buffered: true });
-      new PerformanceObserver((list) => { window.__sitepulseVitals.longTasks += list.getEntries().length; }).observe({ type: "longtask", buffered: true });
+      new PerformanceObserver((list) => { window.__dropseoVitals.longTasks += list.getEntries().length; }).observe({ type: "longtask", buffered: true });
     } catch {}
   });
 }
 
 async function observePage(page, marker) {
   return page.evaluate((prefix) => {
-    document.querySelectorAll("[data-sitepulse-id]").forEach((node) => node.removeAttribute("data-sitepulse-id"));
+    document.querySelectorAll("[data-dropseo-id]").forEach((node) => node.removeAttribute("data-dropseo-id"));
     const isVisible = (element) => {
       const rect = element.getBoundingClientRect();
       const style = getComputedStyle(element);
@@ -197,7 +197,7 @@ async function observePage(page, marker) {
     const selector = "a,button,input,select,textarea,[role='button'],[role='link'],[role='menuitem'],summary";
     const elements = [...document.querySelectorAll(selector)].filter(isVisible).slice(0, 80).map((element, index) => {
       const id = `${prefix}-${index + 1}`;
-      element.setAttribute("data-sitepulse-id", id);
+      element.setAttribute("data-dropseo-id", id);
       const text = (element.getAttribute("aria-label") || element.textContent || element.getAttribute("placeholder") || element.getAttribute("name") || "").replace(/\s+/g, " ").trim().slice(0, 120);
       return {
         id,
@@ -259,7 +259,7 @@ async function collectPerformance(page) {
       resources: resources.length,
       byType,
       slow,
-      vitals: window.__sitepulseVitals || { lcp: 0, cls: 0, longTasks: 0 },
+      vitals: window.__dropseoVitals || { lcp: 0, cls: 0, longTasks: 0 },
     };
   });
 }
@@ -294,7 +294,7 @@ function baseFindings(observation, performance, failures, consoleErrors) {
 async function diagnoseFindings(findings, profile, history, performance) {
   if (!findings.length) return { summary: "No material issue was verified in this bounded run.", prioritized: [] };
   const evidence = findings.map(({ id, category, severity, title, observed, recommendation }) => ({ id, category, severity, title, observed, recommendation }));
-  const prompt = `Prioritize and explain only the deterministic Sitepulse findings below. Do not invent measurements or new findings. Return only listed finding IDs. Keep the summary under 35 words and each explanation under 24 words. Website profile: ${JSON.stringify(profile)}. Browser action outcomes: ${JSON.stringify(history.slice(-8))}. Performance measurements: ${JSON.stringify(performance)}. Findings: ${JSON.stringify(evidence)}`;
+  const prompt = `Prioritize and explain only the deterministic DropSeo findings below. Do not invent measurements or new findings. Return only listed finding IDs. Keep the summary under 35 words and each explanation under 24 words. Website profile: ${JSON.stringify(profile)}. Browser action outcomes: ${JSON.stringify(history.slice(-8))}. Performance measurements: ${JSON.stringify(performance)}. Findings: ${JSON.stringify(evidence)}`;
   try {
     const diagnosis = await askGemini(prompt, diagnosisSchema);
     const validIds = new Set(findings.map((finding) => finding.id));
@@ -406,10 +406,10 @@ async function executeDecision(page, decision, observation, origin) {
   }
   const element = observation.elements.find((item) => item.id === decision.elementId);
   if (!element) return { ok: false, changed: false, message: "The target element is stale or no longer visible." };
-  const locator = page.locator(`[data-sitepulse-id="${decision.elementId}"]`).first();
+  const locator = page.locator(`[data-dropseo-id="${decision.elementId}"]`).first();
   if (decision.action === "type") {
     if (/password|card|payment|otp|phone|tel/i.test(`${element.type} ${element.text}`)) return { ok: false, changed: false, message: "Typing was blocked to protect sensitive fields." };
-    const value = decision.text && decision.text.length < 120 ? decision.text : "sitepulse test";
+    const value = decision.text && decision.text.length < 120 ? decision.text : "dropseo test";
     await locator.fill(value, { timeout: 5000 });
     return { ok: true, changed: true, elementText: element.text, message: `Entered safe test text in “${element.text || element.type}”.` };
   }
@@ -464,7 +464,7 @@ export async function runAgent(input, res) {
   let regressionDetected = false;
   emit(res, { type: "activity", status: "running", title: "Starting browser engines", detail: webcmdInfo.available ? `Playwright + Webcmd ${webcmdInfo.version}` : "Playwright with Webcmd fallback" });
   const browser = await chromium.launch(await browserLaunchOptions());
-  const context = await browser.newContext({ viewport: { width: 1280, height: 760 }, userAgent: "SitepulseAgent/1.0 (+safe autonomous website testing)" });
+  const context = await browser.newContext({ viewport: { width: 1280, height: 760 }, userAgent: "DropSeoAgent/1.0 (+safe autonomous website testing)" });
   const page = await context.newPage();
   const networkFailures = [];
   const consoleErrors = [];

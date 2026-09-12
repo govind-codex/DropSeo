@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Sitepulse Agent | Autonomous Website Intelligence",
+  title: "DropSeo Agent | Autonomous Website Intelligence",
   description: "A browser agent that explores websites, tests real journeys, collects evidence, and verifies fixes.",
   other: {
     "codex-preview": "development",
