@@ -219,7 +219,6 @@ export default function Home() {
         <Link className="brand" href="/" aria-label="DropSeo home"><span className="brand-mark"><Activity size={21} /></span>DropSeo<span>.</span></Link>
         <div className="product-name"><Bot size={15} /> Agent workspace</div>
         <div className="safe-badge"><ShieldCheck size={15} /> Safe mode enforced</div>
-        <div className="avatar">DS</div>
       </header>
 
       <main className="agent-main">
