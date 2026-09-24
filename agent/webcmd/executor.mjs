@@ -2,19 +2,25 @@ import { runBrowserProgram } from "./client.mjs";
 
 const PROHIBITED_ACTION = /\b(buy|purchase|pay|place order|delete|remove account|send message|submit|confirm booking|password|otp|card|payment)\b/i;
 
-function assertSafeWorkflow(workflow, origin) {
+function allowedHost(candidate, origin) {
+  const url = new URL(candidate, origin);
+  const base = new URL(origin).hostname.replace(/^www\./, "");
+  const host = url.hostname.replace(/^www\./, "");
+  return ["http:", "https:"].includes(url.protocol) && !url.username && !url.password && !url.port && (host === base || host.endsWith(`.${base}`));
+}
+
+export function assertSafeWorkflow(workflow, origin) {
   if (!workflow || !Array.isArray(workflow.steps) || workflow.steps.length > 20) throw new Error("The stored workflow is invalid or too large.");
   for (const step of workflow.steps) {
     if (PROHIBITED_ACTION.test(`${step.description || ""} ${step.target?.name || ""}`)) throw new Error("The workflow contains a prohibited consequential action.");
     if (step.type === "type" && (!step.value || step.value.length > 120 || PROHIBITED_ACTION.test(step.description))) throw new Error("The workflow contains unsafe text entry.");
     if (step.url) {
       const candidate = new URL(step.url, origin);
-      const base = new URL(origin).hostname;
-      if (!["http:", "https:"].includes(candidate.protocol) || candidate.username || candidate.password || candidate.port || candidate.hostname !== base) throw new Error("The workflow attempts to leave the explicitly approved host.");
+      if (!allowedHost(candidate, origin)) throw new Error("The workflow attempts to leave the explicitly approved site.");
     }
     if (step.target?.href) {
       const linked = new URL(step.target.href, origin);
-      if (!["http:", "https:"].includes(linked.protocol) || linked.username || linked.password || linked.port || linked.hostname !== new URL(origin).hostname) throw new Error("The workflow target leaves the explicitly approved host.");
+      if (!allowedHost(linked, origin)) throw new Error("The workflow target leaves the explicitly approved site.");
     }
   }
 }
@@ -22,15 +28,26 @@ function assertSafeWorkflow(workflow, origin) {
 function browserProgram(workflow, origin, exploreOnly = false) {
   const serializedWorkflow = JSON.stringify(workflow).replace(/</g, "\\u003c");
   const serializedOrigin = JSON.stringify(origin);
+  const serializedBaseHost = JSON.stringify(new URL(origin).hostname.replace(/^www\./, ""));
+  const serializedProtocol = JSON.stringify(new URL(origin).protocol);
   return `
 const workflow = ${serializedWorkflow};
 const approvedOrigin = ${serializedOrigin};
+const approvedBaseHost = ${serializedBaseHost};
+const approvedProtocol = ${serializedProtocol};
 const resolveUrl = (value) => {
-  if (value === approvedOrigin || value.startsWith(approvedOrigin + "/") || value.startsWith(approvedOrigin + "?") || value.startsWith(approvedOrigin + "#")) return value;
+  if (/^https?:\\/\\//i.test(value)) return value;
+  if (value.startsWith("//")) return approvedProtocol + value;
   if (value.startsWith("/")) return approvedOrigin + value;
   return approvedOrigin + "/" + value.replace(/^\\.\\//, "");
 };
-const allowed = (value) => value === approvedOrigin || value.startsWith(approvedOrigin + "/") || value.startsWith(approvedOrigin + "?") || value.startsWith(approvedOrigin + "#");
+const allowed = (value) => {
+  const candidate = resolveUrl(value);
+  const match = /^https?:\\/\\/([^/?#]+)(?:[/?#]|$)/i.exec(candidate);
+  if (!match || match[1].includes("@") || match[1].includes(":")) return false;
+  const host = match[1].toLowerCase().replace(/^www\\./, "");
+  return host === approvedBaseHost || host.endsWith("." + approvedBaseHost);
+};
 page.on("dialog", dialog => dialog.dismiss().catch(() => {}));
 page.on("download", download => download.cancel().catch(() => {}));
 const results = [];

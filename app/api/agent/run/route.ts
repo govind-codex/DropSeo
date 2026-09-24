@@ -152,6 +152,20 @@ function portableAnalysisStream(request: Request, input: AgentInput) {
 
         const findings = aggregateFindings(analyses);
 
+        if (workflow === "verify") {
+          findings.unshift({
+            id: crypto.randomUUID(),
+            category: "Verification",
+            severity: "high",
+            title: "A browser replay is required to verify this fix",
+            expected: String(input.goal || "The previous behavior should pass during an exact replay."),
+            observed: "The portable analyzer collected current page evidence but cannot replay a saved browser workflow.",
+            recommendation: "Connect the live browser worker, then rerun the saved finding or workflow.",
+            confidence: "verified",
+            evidenceType: "capability-check",
+          });
+        }
+
         for (const win of analysis.ai?.quickWins || []) {
           if (findings.some((finding) => finding.title.toLowerCase() === win.title.toLowerCase())) continue;
           findings.push({
@@ -170,12 +184,20 @@ function portableAnalysisStream(request: Request, input: AgentInput) {
         findings.forEach((finding) => push({ type: "finding", finding }));
         const averageScore = Math.round(analyses.reduce((sum, item) => sum + item.score, 0) / analyses.length);
         const highestPriority = findings.find((finding) => finding.severity === "high") || findings[0];
+        const defaultOutcome = analysis.ai?.verdict || `Audited ${analyses.length} pages with an average score of ${averageScore}/100.${highestPriority ? ` Highest priority: ${highestPriority.title}.` : " No material issues were verified."}`;
+        const outcome = workflow === "journey"
+          ? `Audited ${analyses.length} goal-relevant pages, but the visitor goal was not marked complete because interactive browser evidence was unavailable.`
+          : workflow === "performance"
+            ? `Measured server and document response evidence across ${analyses.length} pages. Browser-rendered LCP, CLS and long-task measurements require the live browser worker.`
+            : workflow === "verify"
+              ? "The fix was not marked verified because no saved browser workflow was replayed."
+              : defaultOutcome;
         const result = {
           runId,
           workflow,
           goal: String(input.goal || ""),
           status: "completed",
-          outcome: analysis.ai?.verdict || `Audited ${analyses.length} pages with an average score of ${averageScore}/100.${highestPriority ? ` Highest priority: ${highestPriority.title}.` : " No material issues were verified."}`,
+          outcome,
           visitedPages: analyses.map((item) => item.url),
           actions: analyses.map((item, index) => ({ sequence: index + 1, action: "inspect", ok: true, url: item.url })),
           performance: {

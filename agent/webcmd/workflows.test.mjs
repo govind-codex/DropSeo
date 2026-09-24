@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { executeWorkflow } from "./executor.mjs";
+import { assertSafeWorkflow, executeWorkflow } from "./executor.mjs";
 import { findWorkflow, learnWorkflow, listWorkflows, recordWorkflowResult, saveWorkflow } from "./workflows.mjs";
 
 test("learns, finds, and records workflow regressions", async () => {
@@ -41,4 +41,9 @@ test("learns, finds, and records workflow regressions", async () => {
 
 test("rejects consequential actions before starting Webcmd", async () => {
   await assert.rejects(() => executeWorkflow({ id: "unsafe-flow", steps: [{ type: "click", description: "Pay now", target: { role: "button", name: "Pay now" } }] }, "https://example.com"), /prohibited consequential action/);
+});
+
+test("allows same-site subdomains but rejects unrelated workflow hosts", () => {
+  assert.doesNotThrow(() => assertSafeWorkflow({ steps: [{ type: "click", description: "Open English", target: { role: "link", name: "English", href: "https://en.wikipedia.org/" } }] }, "https://www.wikipedia.org"));
+  assert.throws(() => assertSafeWorkflow({ steps: [{ type: "click", description: "Leave site", target: { role: "link", name: "Other", href: "https://example.net/" } }] }, "https://example.com"), /approved site/);
 });
