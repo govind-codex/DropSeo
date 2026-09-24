@@ -4,6 +4,7 @@ import path from "node:path";
 import os from "node:os";
 import { randomUUID } from "node:crypto";
 import { chromium } from "playwright-core";
+import { assessGoalCompletion, assessVerification } from "./evaluation.mjs";
 import {
   exploreWebsite,
   findWorkflow,
@@ -459,6 +460,7 @@ export async function runAgent(input, res) {
   const webcmdEnabled = webcmdRuntimeEnabled() && (process.env.VERCEL !== "1" || process.env.WEBCMD_ENABLE_SERVERLESS === "true");
   const webcmdInfo = webcmdEnabled ? await getWebcmdInfo() : { available: false, version: null, reason: "Disabled by WEBCMD_ENABLED." };
   let knownWorkflow = requestedWorkflowId ? await getWorkflow(target.hostname, requestedWorkflowId) : await findWorkflow(target.hostname, goal, workflow);
+  const verificationBaseline = workflow === "verify" ? knownWorkflow : null;
   let webcmdExecution = null;
   let webcmdExploration = null;
   let regressionDetected = false;
@@ -475,6 +477,7 @@ export async function runAgent(input, res) {
   let observation;
   let performance;
   let pageSessionEnded = false;
+  let plannerGoalSatisfied = false;
   let finalOutcome = "The agent completed its bounded investigation.";
 
   page.on("dialog", (dialog) => dialog.dismiss().catch(() => {}));
@@ -575,7 +578,11 @@ export async function runAgent(input, res) {
         emit(res, { type: "activity", status: "warning", title: "Browser session ended early", detail: "Continuing with the evidence already collected instead of interrupting the report." });
         break;
       }
-      if (decision.goalSatisfied) { finalOutcome = decision.outcome || "The requested goal was satisfied."; break; }
+      if (decision.goalSatisfied) {
+        plannerGoalSatisfied = true;
+        finalOutcome = decision.outcome || "The requested goal was satisfied.";
+        break;
+      }
     }
 
     if (!pageSessionEnded) {
@@ -585,11 +592,23 @@ export async function runAgent(input, res) {
         pageSessionEnded = true;
       }
     }
+    const goalEvaluation = assessGoalCompletion({ goal, observation, history, plannerSatisfied: plannerGoalSatisfied });
+    const verification = workflow === "verify" ? assessVerification({ baselineWorkflow: verificationBaseline, replayResult: webcmdExecution }) : null;
+    if (workflow === "journey") {
+      finalOutcome = goalEvaluation.passed
+        ? `Goal completed with browser evidence${goalEvaluation.finalTitle ? ` on “${goalEvaluation.finalTitle}”` : ""}.`
+        : "The requested visitor goal could not be confirmed within this bounded run.";
+    }
+    if (workflow === "verify" && verification) {
+      finalOutcome = verification.passed
+        ? `Fix verified by replaying “${verificationBaseline.name}”.`
+        : verification.message;
+    }
     const findings = baseFindings(observation, performance, networkFailures, consoleErrors);
     const metricRegressions = deterministicRegressions(previousRun, observation, performance);
     findings.unshift(...metricRegressions.map((item) => item.finding));
     for (const step of history.filter((item) => item.ok && item.changed === false)) findings.push({ id: randomUUID(), category: "UX", severity: "medium", title: "An interaction produced no visible response", expected: "The selected control should navigate or provide visible feedback.", observed: step.message, recommendation: "Confirm the event handler and add immediate visible feedback for the interaction.", confidence: "hypothesis", evidenceType: "browser-action" });
-    if (workflow === "verify" && goal) findings.unshift({ id: randomUUID(), category: "Verification", severity: history.some((step) => step.ok && step.changed) ? "resolved" : "high", title: history.some((step) => step.ok && step.changed) ? "Previous behavior responded during verification" : "Previous issue could not be verified as fixed", expected: goal, observed: finalOutcome, recommendation: history.some((step) => step.ok && step.changed) ? "Keep this journey in regression monitoring." : "Review the evidence and repeat after the implementation changes.", confidence: "verified", evidenceType: "browser-action" });
+    if (workflow === "verify" && goal && verification) findings.unshift({ id: randomUUID(), category: "Verification", severity: verification.passed ? "resolved" : "high", title: verification.passed ? "Previous workflow passed during replay" : verification.baselineAvailable ? "Previous workflow did not pass during replay" : "No previous workflow was available to verify", expected: goal, observed: finalOutcome, recommendation: verification.passed ? "Keep this exact workflow in regression monitoring." : verification.baselineAvailable ? "Review the failed replay step and repeat after correcting the implementation." : "Run the original journey first, then verify its saved finding or workflow.", confidence: "verified", evidenceType: verification.replayed ? "workflow-replay" : "baseline-check" });
     if (regressionDetected) findings.unshift({ id: randomUUID(), category: "Regression", severity: "high", title: "A previously passing browser workflow failed", expected: `Workflow “${knownWorkflow.name}” should continue to pass.`, observed: webcmdExecution?.message || "The known journey could not be completed.", recommendation: "Review the failed Webcmd step and current page structure, then validate the recovered workflow.", confidence: "verified", evidenceType: "webcmd-workflow" });
 
     let learnedWorkflow = knownWorkflow;
@@ -617,7 +636,7 @@ export async function runAgent(input, res) {
     }
     if (learnedWorkflow) findings.forEach((finding) => { finding.workflowId = learnedWorkflow.id; });
     findings.forEach((finding) => emit(res, { type: "finding", finding }));
-    const result = { runId, workflow, goal, status: "completed", completedAt: new Date().toISOString(), profile, outcome: finalOutcome, diagnosis, visitedPages: [...visited], actions: history, performance, auditSnapshot: { titlePresent: Boolean(observation.title), metaDescriptionPresent: Boolean(observation.description), canonicalPresent: Boolean(observation.canonical), h1Count: observation.headings.filter((item) => item.level === "H1").length }, regressions: { workflow: regressionDetected, metrics: metricRegressions.map((item) => ({ metric: item.metric, previous: item.previous, current: item.current })) }, findings, browserIntelligence: { webcmd: webcmdInfo, mode: webcmdExecution?.passed ? "reused" : webcmdExploration ? "explored" : "playwright-fallback", workflow: learnedWorkflow ? { id: learnedWorkflow.id, name: learnedWorkflow.name, status: learnedWorkflow.status, successRate: learnedWorkflow.successRate, steps: learnedWorkflow.steps.length } : null, regressionDetected: regressionDetected || metricRegressions.length > 0, partialEvidence: pageSessionEnded }, safety: { blockedActions: history.filter((item) => item.blocked).length, domainRestricted: true, sensitiveFieldsProtected: true, consequentialActionsProhibited: true }, durationMs: Date.now() - startedAt };
+    const result = { runId, workflow, goal, status: "completed", completedAt: new Date().toISOString(), profile, outcome: finalOutcome, diagnosis, visitedPages: [...visited], actions: history, goalEvaluation: workflow === "journey" ? goalEvaluation : undefined, verification: verification || undefined, performance, auditSnapshot: { titlePresent: Boolean(observation.title), metaDescriptionPresent: Boolean(observation.description), canonicalPresent: Boolean(observation.canonical), h1Count: observation.headings.filter((item) => item.level === "H1").length }, regressions: { workflow: regressionDetected, metrics: metricRegressions.map((item) => ({ metric: item.metric, previous: item.previous, current: item.current })) }, findings, browserIntelligence: { webcmd: webcmdInfo, mode: webcmdExecution?.passed ? "reused" : webcmdExploration ? "explored" : "playwright-fallback", workflow: learnedWorkflow ? { id: learnedWorkflow.id, name: learnedWorkflow.name, status: learnedWorkflow.status, successRate: learnedWorkflow.successRate, steps: learnedWorkflow.steps.length } : null, regressionDetected: regressionDetected || metricRegressions.length > 0, partialEvidence: pageSessionEnded }, safety: { blockedActions: history.filter((item) => item.blocked).length, domainRestricted: true, sensitiveFieldsProtected: true, consequentialActionsProhibited: true }, durationMs: Date.now() - startedAt };
     await fs.mkdir(runOutputDirectory(), { recursive: true });
     await fs.writeFile(path.join(runOutputDirectory(), `${runId}.json`), JSON.stringify(result, null, 2));
     emit(res, { type: "complete", result });

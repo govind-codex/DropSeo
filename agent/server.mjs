@@ -7,6 +7,25 @@ try { process.loadEnvFile?.(".env.local"); } catch {}
 const PORT = Number(process.env.PORT || process.env.AGENT_WORKER_PORT || 8788);
 const HOST = process.env.AGENT_WORKER_HOST || "0.0.0.0";
 const MAX_BODY = 64_000;
+const MAX_CONCURRENT_RUNS = Math.min(4, Math.max(1, Number(process.env.AGENT_MAX_CONCURRENT_RUNS) || 1));
+let activeRuns = 0;
+const waitingRuns = [];
+
+function acquireRunSlot() {
+  if (activeRuns < MAX_CONCURRENT_RUNS) {
+    activeRuns += 1;
+    return Promise.resolve(() => releaseRunSlot());
+  }
+  return new Promise((resolve) => waitingRuns.push(resolve)).then(() => {
+    activeRuns += 1;
+    return () => releaseRunSlot();
+  });
+}
+
+function releaseRunSlot() {
+  activeRuns = Math.max(0, activeRuns - 1);
+  waitingRuns.shift()?.();
+}
 
 function sendJson(res, status, value) {
   res.writeHead(status, { "content-type": "application/json", "access-control-allow-origin": "*" });
@@ -48,7 +67,10 @@ const server = http.createServer(async (req, res) => {
     try {
       const input = await readBody(req);
       res.writeHead(200, { "content-type": "application/x-ndjson", "cache-control": "no-cache, no-transform", "access-control-allow-origin": "*", connection: "keep-alive" });
-      await runAgent(input, res);
+      if (activeRuns >= MAX_CONCURRENT_RUNS) emit(res, { type: "activity", status: "running", title: "Run queued", detail: "The browser worker is finishing another investigation before this one starts." });
+      const release = await acquireRunSlot();
+      try { await runAgent(input, res); }
+      finally { release(); }
       return res.end();
     } catch (error) {
       if (res.headersSent) { emit(res, { type: "error", error: error instanceof Error ? error.message : "Agent run failed." }); return res.end(); }
