@@ -1,4 +1,5 @@
-import { POST as analyzeWebsite } from "../../analyze/route";
+import { analyzeAuthenticatedWebsite as analyzeWebsite } from "@/lib/website-analysis";
+import { getSession, validMutationOrigin } from "@/lib/auth";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -48,6 +49,8 @@ export function GET() {
 }
 
 export async function POST(request: Request) {
+  if (!(await getSession())) return Response.json({ error: "Sign in with Google to start an investigation." }, { status: 401 });
+  if (!validMutationOrigin(request)) return Response.json({ error: "Invalid request origin." }, { status: 403 });
   try {
     const payload = await request.text();
     const input = JSON.parse(payload || "{}") as AgentInput;
