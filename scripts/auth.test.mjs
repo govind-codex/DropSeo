@@ -21,7 +21,7 @@ async function load(relativePath, authUrl) {
 }
 
 test("Google authentication safeguards and complete callback", async (t) => {
-  const envKeys = ["NODE_ENV", "AUTH_URL", "AUTH_SECRET", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"];
+  const envKeys = ["NODE_ENV", "AUTH_URL", "AUTH_SECRET", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "VERCEL_PROJECT_PRODUCTION_URL"];
   const savedEnv = Object.fromEntries(envKeys.map(key => [key, process.env[key]]));
   const originalFetch = globalThis.fetch;
   Object.assign(process.env, { NODE_ENV: "test", AUTH_URL: "http://localhost:3000", AUTH_SECRET: "a-test-only-secret-at-least-32-characters-long", GOOGLE_CLIENT_ID: "test-client.apps.googleusercontent.com", GOOGLE_CLIENT_SECRET: "test-client-secret" });
@@ -38,6 +38,25 @@ test("Google authentication safeguards and complete callback", async (t) => {
     await t.test("production rejects an insecure origin", () => {
       process.env.NODE_ENV = "production";
       assert.throws(() => auth.authConfig());
+      process.env.NODE_ENV = "test";
+    });
+    await t.test("production uses Vercel's canonical project URL when AUTH_URL is absent", () => {
+      process.env.NODE_ENV = "production";
+      delete process.env.AUTH_URL;
+      process.env.VERCEL_PROJECT_PRODUCTION_URL = "dropseo.example.com";
+      const config = auth.authConfig();
+      assert.equal(config.origin, "https://dropseo.example.com");
+      assert.equal(config.callbackUrl, "https://dropseo.example.com/api/auth/google/callback");
+      delete process.env.VERCEL_PROJECT_PRODUCTION_URL;
+      process.env.AUTH_URL = "http://localhost:3000";
+      process.env.NODE_ENV = "test";
+    });
+    await t.test("production still fails closed without a trusted origin", () => {
+      process.env.NODE_ENV = "production";
+      delete process.env.AUTH_URL;
+      delete process.env.VERCEL_PROJECT_PRODUCTION_URL;
+      assert.throws(() => auth.authConfig(), /AUTH_URL is required/);
+      process.env.AUTH_URL = "http://localhost:3000";
       process.env.NODE_ENV = "test";
     });
     await t.test("session signature, expiration, and audience are enforced", async () => {

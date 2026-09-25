@@ -16,13 +16,16 @@ const googleKeys = createRemoteJWKSet(
 export async function GET(request: Request) {
   let config: ReturnType<typeof authConfig>;
   try { config = authConfig(); }
-  catch { return NextResponse.redirect(new URL("/login?error=configuration", request.url), { headers: { "Cache-Control": "no-store" } }); }
+  catch (error) {
+    console.error("Google OAuth configuration error:", error instanceof Error ? error.message : "Unknown configuration error");
+    return NextResponse.redirect(new URL("/login?error=configuration", request.url), { headers: { "Cache-Control": "no-store" } });
+  }
 
   function failure(reason: string) {
     const response = NextResponse.redirect(new URL(`/login?error=${reason}`, config.origin));
     response.headers.set("Cache-Control", "no-store");
     response.headers.set("Referrer-Policy", "no-referrer");
-    response.cookies.set(FLOW_COOKIE, "", cookieOptions(0));
+    response.cookies.set(FLOW_COOKIE, "", cookieOptions(0, config.secure));
     return response;
   }
 
@@ -32,7 +35,7 @@ export async function GET(request: Request) {
   if (!state || !token) return failure("expired");
   let flow: Awaited<ReturnType<typeof readAuthToken>>;
   try {
-    flow = await readAuthToken(token, "oauth");
+    flow = await readAuthToken(token, "oauth", config.secret);
     if (flow.state !== state || typeof flow.verifier !== "string" || typeof flow.nonce !== "string") return failure("expired");
   } catch { return failure("expired"); }
   if (params.get("error")) return failure(params.get("error") === "access_denied" ? "cancelled" : "failed");
@@ -54,8 +57,8 @@ export async function GET(request: Request) {
     const response = NextResponse.redirect(new URL("/dashboard", config.origin));
     response.headers.set("Cache-Control", "no-store");
     response.headers.set("Referrer-Policy", "no-referrer");
-    response.cookies.set(FLOW_COOKIE, "", cookieOptions(0));
-    response.cookies.set(SESSION_COOKIE, await signAuthToken({ sub: payload.sub, name, email: payload.email }, "session", 60 * 60 * 24 * 7), cookieOptions(60 * 60 * 24 * 7));
+    response.cookies.set(FLOW_COOKIE, "", cookieOptions(0, config.secure));
+    response.cookies.set(SESSION_COOKIE, await signAuthToken({ sub: payload.sub, name, email: payload.email }, "session", 60 * 60 * 24 * 7, config.secret), cookieOptions(60 * 60 * 24 * 7, config.secure));
     return response;
   } catch { return failure("failed"); }
 }

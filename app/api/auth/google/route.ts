@@ -7,7 +7,10 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   let config: ReturnType<typeof authConfig>;
   try { config = authConfig(); }
-  catch { return NextResponse.redirect(new URL("/login?error=configuration", request.url), { headers: { "Cache-Control": "no-store" } }); }
+  catch (error) {
+    console.error("Google OAuth configuration error:", error instanceof Error ? error.message : "Unknown configuration error");
+    return NextResponse.redirect(new URL("/login?error=configuration", request.url), { headers: { "Cache-Control": "no-store" } });
+  }
   const state = base64url.encode(crypto.getRandomValues(new Uint8Array(32)));
   const nonce = base64url.encode(crypto.getRandomValues(new Uint8Array(32)));
   const verifier = base64url.encode(crypto.getRandomValues(new Uint8Array(32)));
@@ -16,6 +19,6 @@ export async function GET(request: Request) {
   url.search = new URLSearchParams({ client_id: config.clientId, redirect_uri: config.callbackUrl, response_type: "code", scope: "openid email profile", state, nonce, code_challenge: challenge, code_challenge_method: "S256", prompt: "select_account" }).toString();
   const response = NextResponse.redirect(url);
   response.headers.set("Cache-Control", "no-store");
-  response.cookies.set(FLOW_COOKIE, await signAuthToken({ state, nonce, verifier }, "oauth", 600), cookieOptions(600));
+  response.cookies.set(FLOW_COOKIE, await signAuthToken({ state, nonce, verifier }, "oauth", 600, config.secret), cookieOptions(600, config.secure));
   return response;
 }
