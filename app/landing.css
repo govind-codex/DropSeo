@@ -23,3 +23,24 @@
 .capability-icon{background:linear-gradient(135deg,#e2f4ed,#d9efe6)}
 .auth-page{background:radial-gradient(circle at 18% 18%,#d9f3e9 0,transparent 36%),radial-gradient(circle at 85% 12%,#e1f6ed 0,transparent 32%),linear-gradient(145deg,#f7fbf9,#edf8f3)}
 .auth-card{background:linear-gradient(150deg,#ffffff 0%,#fbfefd 66%,#edf9f4 100%)}
+
+/* Compact product preview */
+.product-preview{width:100%;max-width:500px;justify-self:end}
+.preview-toolbar{padding:13px 16px}
+.preview-address{margin:16px 16px 0;padding:10px 12px;font-size:13px}
+.preview-mission{gap:11px;padding:19px 16px 7px}
+.preview-agent{width:40px;height:40px;border-radius:11px}
+.preview-agent svg{width:22px;height:22px}
+.preview-mission small{font-size:11px}
+.preview-mission h2{font-size:18px;margin-top:3px}
+.preview-steps{padding:2px 16px 10px}
+.preview-steps>div{gap:10px;padding:12px 0}
+.preview-steps>div>span{width:27px;height:27px;font-size:11px}
+.preview-steps strong{font-size:13px}
+.preview-steps p{font-size:12px;line-height:1.4;margin-top:3px}
+.preview-evidence{margin:0 16px 15px;padding:12px}
+.preview-evidence strong{font-size:12px}
+.preview-evidence p{font-size:11px;margin-top:4px}
+.preview-bottom{padding:10px 16px;font-size:11px}
+.preview-bottom span{font-size:11px}
+@media(max-width:1000px){.product-preview{justify-self:center}}
