@@ -12,7 +12,7 @@ export default async function LandingPage() {
       <a className="skip-link" href="#main">Skip to content</a>
       <header className="landing-nav">
         <Link className="brand" href="/" aria-label="AudiFox home"><span className="brand-mark"><Activity size={21} /></span>AudiFox<span>.</span></Link>
-        <nav aria-label="Main navigation"><a href="#how-it-works">How it works</a><a href="#capabilities">Capabilities</a></nav>
+        <nav aria-label="Main navigation"><a href="#how-it-works">How it works</a><a href="#capabilities">Capabilities</a><a href="#pricing">Pricing</a></nav>
         <a className="nav-signin" href={user ? "/dashboard" : "/api/auth/google"} target={user ? undefined : "_top"}>{user ? "Workspace" : "Sign in"} <ArrowRight size={16} /></a>
       </header>
       <main id="main">
@@ -42,6 +42,35 @@ export default async function LandingPage() {
             <article><span className="capability-icon"><Gauge /></span><h3>Uncover slowdowns</h3><p>Measure page performance and investigate likely causes of friction.</p></article>
             <article><span className="capability-icon"><ShieldCheck /></span><h3>Verify your fixes</h3><p>Revisit a reported problem and check that the behavior has improved.</p></article>
           </div>
+        </section>
+        <section className="landing-pricing" id="pricing" aria-labelledby="pricing-heading">
+          <div className="pricing-intro">
+            <span className="landing-eyebrow">SIMPLE MONTHLY PRICING</span>
+            <h2 id="pricing-heading">Start small. Investigate deeper when you need to.</h2>
+            <p>Every plan keeps AudiFox in safe mode and brings back evidence you can act on.</p>
+          </div>
+          <div className="pricing-grid">
+            <article className="pricing-card">
+              <div className="pricing-card-heading"><span>Free</span><p>For trying AudiFox on your own site.</p></div>
+              <div className="price"><strong>₹0</strong><span>/ month</span></div>
+              <ul><li><Check />3 investigations each month</li><li><Check />Up to 4 pages per investigation</li><li><Check />Evidence-backed findings</li><li><Check />Downloadable reports</li></ul>
+              <a href={user ? "/dashboard" : "/api/auth/google"} target={user ? undefined : "_top"} className="pricing-cta secondary">Start free <ArrowRight /></a>
+            </article>
+            <article className="pricing-card featured">
+              <span className="popular-badge">MOST POPULAR</span>
+              <div className="pricing-card-heading"><span>Pro</span><p>For growing sites that need regular checks.</p></div>
+              <div className="price"><strong>₹799</strong><span>/ month</span></div>
+              <ul><li><Check />50 investigations each month</li><li><Check />Up to 15 pages per investigation</li><li><Check />Journey and performance workflows</li><li><Check />Verification runs and report exports</li></ul>
+              <a href={user ? "/dashboard" : "/api/auth/google"} target={user ? undefined : "_top"} className="pricing-cta">Choose Pro <ArrowRight /></a>
+            </article>
+            <article className="pricing-card">
+              <div className="pricing-card-heading"><span>Studio</span><p>For teams managing multiple websites.</p></div>
+              <div className="price"><strong>₹1,999</strong><span>/ month</span></div>
+              <ul><li><Check />200 investigations each month</li><li><Check />Up to 30 pages per investigation</li><li><Check />Five workspace members</li><li><Check />Priority investigation queue</li></ul>
+              <a href={user ? "/dashboard" : "/api/auth/google"} target={user ? undefined : "_top"} className="pricing-cta secondary">Choose Studio <ArrowRight /></a>
+            </article>
+          </div>
+          <p className="pricing-note">Early-access monthly pricing. Taxes may apply based on your location.</p>
         </section>
         <section className="landing-how" id="how-it-works" aria-labelledby="how-heading"><div><span className="landing-eyebrow">FROM URL TO INSIGHT</span><h2 id="how-heading">Your next investigation<br />is three steps away.</h2><a href={user ? "/dashboard" : "/api/auth/google"} className="text-cta" target={user ? undefined : "_top"}>Open your workspace <ArrowRight size={18} /></a></div><ol><li><span>1</span><div><h3>Sign in with Google</h3><p>Securely enter your AudiFox workspace.</p></div></li><li><span>2</span><div><h3>Give the agent a website</h3><p>Paste a public URL and choose a workflow.</p></div></li><li><span>3</span><div><h3>Turn findings into fixes</h3><p>Follow the investigation and review the evidence.</p></div></li></ol></section>
       </main>
