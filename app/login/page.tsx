@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { Activity } from "lucide-react";
 import { redirect } from "next/navigation";
 import { GoogleSignIn } from "@/components/google-signin";
 import { getSession } from "@/lib/auth";
@@ -18,5 +17,5 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   if (await getSession()) redirect("/dashboard");
   const { error } = await searchParams;
   const message = error && Object.hasOwn(messages, error) ? messages[error] : { title: "Your workspace awaits", detail: "Sign in with Google to investigate a website, follow the agent, and review evidence-backed findings." };
-  return <main className="auth-page"><section className="auth-card"><Link className="brand" href="/"><span className="brand-mark"><Activity size={21} /></span>AudiFox<span>.</span></Link><div role={error ? "alert" : undefined}><h1>{message.title}</h1><p>{message.detail}</p></div>{error !== "configuration" && <GoogleSignIn />}<Link className="back-link" href="/">Back to home</Link></section></main>;
+  return <main className="auth-page"><section className="auth-card"><Link className="brand" href="/"><span className="brand-mark" aria-hidden="true"><img src="/audifox-logo.png" alt="" width="40" height="40" /></span>AudiFox<span>.</span></Link><div role={error ? "alert" : undefined}><h1>{message.title}</h1><p>{message.detail}</p></div>{error !== "configuration" && <GoogleSignIn />}<Link className="back-link" href="/">Back to home</Link></section></main>;
 }

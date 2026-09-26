@@ -9,8 +9,9 @@ export const metadata: Metadata = {
     "codex-preview": "development",
   },
   icons: {
-    icon: "/favicon.svg",
-    shortcut: "/favicon.svg",
+    icon: "/audifox-logo.png",
+    shortcut: "/audifox-logo.png",
+    apple: "/audifox-logo.png",
   },
 };
 
