@@ -23,6 +23,7 @@
   "dependencies": {
     "@agentrhq/webcmd": "^0.8.4",
     "@base-ui/react": "^1.7.0",
+    "@dodopayments/nextjs": "^0.3.9",
     "@hookform/resolvers": "^5.7.1",
     "@shadcn/react": "^0.3.0",
     "@sparticuz/chromium-min": "^141.0.0",

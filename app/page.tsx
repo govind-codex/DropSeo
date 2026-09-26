@@ -61,13 +61,13 @@ export default async function LandingPage() {
               <div className="pricing-card-heading"><span>Pro</span><p>For growing sites that need regular checks.</p></div>
               <div className="price"><strong>$9</strong><span>/ month</span></div>
               <ul><li><Check />50 investigations each month</li><li><Check />Up to 15 pages per investigation</li><li><Check />Journey and performance workflows</li><li><Check />Verification runs and report exports</li></ul>
-              <a href={user ? "/dashboard" : "/api/auth/google"} target={user ? undefined : "_top"} className="pricing-cta">Choose Pro <ArrowRight /></a>
+              {user ? <form className="pricing-form" action="/api/payments/checkout" method="post"><input type="hidden" name="plan" value="pro" /><button type="submit" className="pricing-cta">Choose Pro <ArrowRight /></button></form> : <a href="/api/auth/google" target="_top" className="pricing-cta">Sign in to choose Pro <ArrowRight /></a>}
             </article>
             <article className="pricing-card">
               <div className="pricing-card-heading"><span>Studio</span><p>For teams managing multiple websites.</p></div>
               <div className="price"><strong>$24</strong><span>/ month</span></div>
               <ul><li><Check />200 investigations each month</li><li><Check />Up to 30 pages per investigation</li><li><Check />Five workspace members</li><li><Check />Priority investigation queue</li></ul>
-              <a href={user ? "/dashboard" : "/api/auth/google"} target={user ? undefined : "_top"} className="pricing-cta secondary">Choose Studio <ArrowRight /></a>
+              {user ? <form className="pricing-form" action="/api/payments/checkout" method="post"><input type="hidden" name="plan" value="studio" /><button type="submit" className="pricing-cta secondary">Choose Studio <ArrowRight /></button></form> : <a href="/api/auth/google" target="_top" className="pricing-cta secondary">Sign in to choose Studio <ArrowRight /></a>}
             </article>
           </div>
           <p className="pricing-note">Early-access monthly pricing. Taxes may apply based on your location.</p>
