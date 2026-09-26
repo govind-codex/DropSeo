@@ -131,7 +131,7 @@ export async function recordWorkflowResult(workflow, result) {
 
 export async function rememberWorkflowInWebcmd(workflow) {
   const summary = [
-    `## DropSeo learned workflow: ${workflow.name}`,
+    `## AudiFox learned workflow: ${workflow.name}`,
     `Goal: ${workflow.goal || workflow.runType}`,
     `Workflow ID: ${workflow.id}`,
     ...workflow.steps.map((step, index) => `${index + 1}. ${step.description}${step.expectedOutcome ? ` — expected: ${step.expectedOutcome}` : ""}`),

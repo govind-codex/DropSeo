@@ -43,7 +43,7 @@ export function GET() {
   const useExternalBrowser = Boolean(process.env.AGENT_WORKER_URL) && process.env.AGENT_BROWSER_MODE !== "portable";
   return Response.json({
     ok: true,
-    service: "dropseo-agent",
+    service: "audifox-agent",
     mode: useExternalBrowser ? "external-browser" : "portable-analysis",
   });
 }

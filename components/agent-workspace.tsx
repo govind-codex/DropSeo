@@ -212,7 +212,7 @@ export default function AgentWorkspace({ user }: { user: { name: string; email: 
     const blob = new Blob([JSON.stringify({ ...result, profile }, null, 2)], { type: "application/json" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `dropseo-agent-${result.runId.slice(0, 8)}.json`;
+    link.download = `audifox-agent-${result.runId.slice(0, 8)}.json`;
     link.click();
     URL.revokeObjectURL(link.href);
   }
@@ -220,7 +220,7 @@ export default function AgentWorkspace({ user }: { user: { name: string; email: 
   return (
     <div className="agent-app">
       <header className="topbar">
-        <Link className="brand" href="/" aria-label="DropSeo home"><span className="brand-mark"><Activity size={21} /></span>DropSeo<span>.</span></Link>
+        <Link className="brand" href="/" aria-label="AudiFox home"><span className="brand-mark"><Activity size={21} /></span>AudiFox<span>.</span></Link>
         <div className="product-name"><Bot size={15} /> Agent workspace</div>
         <div className="safe-badge"><ShieldCheck size={15} /> Safe mode enforced</div>
         <div className="workspace-account"><span className="avatar" aria-hidden="true">{user.name.slice(0, 1).toUpperCase()}</span><span className="account-name" title={user.email}>{user.name}</span><form action="/api/auth/logout" method="post"><button className="signout-button" type="submit">Sign out</button></form></div>
@@ -258,7 +258,7 @@ export default function AgentWorkspace({ user }: { user: { name: string; email: 
 
         {recentRuns.length > 0 && <section className="history-section"><div className="results-heading"><div><span className="eyebrow"><History size={13} /> WEBSITE MEMORY</span><h2>Recent investigations</h2></div></div><div className="history-list">{recentRuns.map((run) => <article key={run.runId}><span className="history-icon"><Globe2 /></span><div><strong>{hostnameFor(run.url || "")}</strong><p>{run.outcome}</p></div><span>{run.workflow}</span><b>{run.findings} findings</b><small>{new Date(run.completedAt).toLocaleString()}</small><ChevronRight /></article>)}</div></section>}
       </main>
-      <footer className="agent-footer"><span><Activity /> DropSeo Agent</span><p>Bounded autonomy · Evidence before claims · Consequential actions blocked</p></footer>
+      <footer className="agent-footer"><span><Activity /> AudiFox Agent</span><p>Bounded autonomy · Evidence before claims · Consequential actions blocked</p></footer>
     </div>
   );
 }

@@ -11,7 +11,7 @@ export default async function LandingPage() {
     <div className="landing-page">
       <a className="skip-link" href="#main">Skip to content</a>
       <header className="landing-nav">
-        <Link className="brand" href="/" aria-label="DropSeo home"><span className="brand-mark"><Activity size={21} /></span>DropSeo<span>.</span></Link>
+        <Link className="brand" href="/" aria-label="AudiFox home"><span className="brand-mark"><Activity size={21} /></span>AudiFox<span>.</span></Link>
         <nav aria-label="Main navigation"><a href="#how-it-works">How it works</a><a href="#capabilities">Capabilities</a></nav>
         <a className="nav-signin" href={user ? "/dashboard" : "/api/auth/google"} target={user ? undefined : "_top"}>{user ? "Workspace" : "Sign in"} <ArrowRight size={16} /></a>
       </header>
@@ -25,7 +25,7 @@ export default async function LandingPage() {
             <span className="signin-note"><LockKeyhole size={13} /> Sign in securely. Go straight to your workspace.</span>
             <div className="hero-benefits"><span><Check size={16} /> Evidence-backed findings</span><span><Check size={16} /> Safe, bounded exploration</span></div>
           </div>
-          <div className="product-preview" aria-label="Illustrative preview of a DropSeo investigation">
+          <div className="product-preview" aria-label="Illustrative preview of an AudiFox investigation">
             <div className="preview-toolbar"><span><Bot size={17} /> Agent workspace</span><span className="preview-label">PRODUCT PREVIEW</span></div>
             <div className="preview-address"><Globe2 size={17} /><span>your-website.com</span><span className="preview-scope">PUBLIC WEB</span></div>
             <div className="preview-mission"><span className="preview-agent"><Bot size={26} /></span><div><small>INVESTIGATION PLAN</small><h2>A better journey starts here.</h2></div></div>
@@ -43,9 +43,9 @@ export default async function LandingPage() {
             <article><span className="capability-icon"><ShieldCheck /></span><h3>Verify your fixes</h3><p>Revisit a reported problem and check that the behavior has improved.</p></article>
           </div>
         </section>
-        <section className="landing-how" id="how-it-works" aria-labelledby="how-heading"><div><span className="landing-eyebrow">FROM URL TO INSIGHT</span><h2 id="how-heading">Your next investigation<br />is three steps away.</h2><a href={user ? "/dashboard" : "/api/auth/google"} className="text-cta" target={user ? undefined : "_top"}>Open your workspace <ArrowRight size={18} /></a></div><ol><li><span>1</span><div><h3>Sign in with Google</h3><p>Securely enter your DropSeo workspace.</p></div></li><li><span>2</span><div><h3>Give the agent a website</h3><p>Paste a public URL and choose a workflow.</p></div></li><li><span>3</span><div><h3>Turn findings into fixes</h3><p>Follow the investigation and review the evidence.</p></div></li></ol></section>
+        <section className="landing-how" id="how-it-works" aria-labelledby="how-heading"><div><span className="landing-eyebrow">FROM URL TO INSIGHT</span><h2 id="how-heading">Your next investigation<br />is three steps away.</h2><a href={user ? "/dashboard" : "/api/auth/google"} className="text-cta" target={user ? undefined : "_top"}>Open your workspace <ArrowRight size={18} /></a></div><ol><li><span>1</span><div><h3>Sign in with Google</h3><p>Securely enter your AudiFox workspace.</p></div></li><li><span>2</span><div><h3>Give the agent a website</h3><p>Paste a public URL and choose a workflow.</p></div></li><li><span>3</span><div><h3>Turn findings into fixes</h3><p>Follow the investigation and review the evidence.</p></div></li></ol></section>
       </main>
-      <footer className="landing-footer"><Link className="brand" href="/"><span className="brand-mark"><Activity size={18} /></span>DropSeo<span>.</span></Link><p>Evidence before claims. Safety before actions.</p><span>© {new Date().getFullYear()} DropSeo</span></footer>
+      <footer className="landing-footer"><Link className="brand" href="/"><span className="brand-mark"><Activity size={18} /></span>AudiFox<span>.</span></Link><p>Evidence before claims. Safety before actions.</p><span>© {new Date().getFullYear()} AudiFox</span></footer>
     </div>
   );
 }

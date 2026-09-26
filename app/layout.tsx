@@ -3,7 +3,7 @@ import "./globals.css";
 import "./landing.css";
 
 export const metadata: Metadata = {
-  title: "DropSeo Agent | Autonomous Website Intelligence",
+  title: "AudiFox Agent | Autonomous Website Intelligence",
   description: "A browser agent that explores websites, tests real journeys, collects evidence, and verifies fixes.",
   other: {
     "codex-preview": "development",

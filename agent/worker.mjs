@@ -295,7 +295,7 @@ function baseFindings(observation, performance, failures, consoleErrors) {
 async function diagnoseFindings(findings, profile, history, performance) {
   if (!findings.length) return { summary: "No material issue was verified in this bounded run.", prioritized: [] };
   const evidence = findings.map(({ id, category, severity, title, observed, recommendation }) => ({ id, category, severity, title, observed, recommendation }));
-  const prompt = `Prioritize and explain only the deterministic DropSeo findings below. Do not invent measurements or new findings. Return only listed finding IDs. Keep the summary under 35 words and each explanation under 24 words. Website profile: ${JSON.stringify(profile)}. Browser action outcomes: ${JSON.stringify(history.slice(-8))}. Performance measurements: ${JSON.stringify(performance)}. Findings: ${JSON.stringify(evidence)}`;
+  const prompt = `Prioritize and explain only the deterministic AudiFox findings below. Do not invent measurements or new findings. Return only listed finding IDs. Keep the summary under 35 words and each explanation under 24 words. Website profile: ${JSON.stringify(profile)}. Browser action outcomes: ${JSON.stringify(history.slice(-8))}. Performance measurements: ${JSON.stringify(performance)}. Findings: ${JSON.stringify(evidence)}`;
   try {
     const diagnosis = await askGemini(prompt, diagnosisSchema);
     const validIds = new Set(findings.map((finding) => finding.id));
@@ -466,7 +466,7 @@ export async function runAgent(input, res) {
   let regressionDetected = false;
   emit(res, { type: "activity", status: "running", title: "Starting browser engines", detail: webcmdInfo.available ? `Playwright + Webcmd ${webcmdInfo.version}` : "Playwright with Webcmd fallback" });
   const browser = await chromium.launch(await browserLaunchOptions());
-  const context = await browser.newContext({ viewport: { width: 1280, height: 760 }, userAgent: "DropSeoAgent/1.0 (+safe autonomous website testing)" });
+  const context = await browser.newContext({ viewport: { width: 1280, height: 760 }, userAgent: "AudiFoxAgent/1.0 (+safe autonomous website testing)" });
   const page = await context.newPage();
   const networkFailures = [];
   const consoleErrors = [];

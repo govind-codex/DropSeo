@@ -1,5 +1,5 @@
 /**
- * Runtime constants and JSDoc types for DropSeo's Webcmd integration.
+ * Runtime constants and JSDoc types for AudiFox's Webcmd integration.
  * Webcmd's public workflow primitive is a sandboxed Playwright-style
  * `browser run` program, so stored steps remain portable and auditable.
  */

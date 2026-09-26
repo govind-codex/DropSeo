@@ -80,10 +80,10 @@ const server = http.createServer(async (req, res) => {
   return sendJson(res, 404, { error: "Not found." });
 });
 
-server.listen(PORT, HOST, () => console.log(`DropSeo agent worker ready at http://${HOST}:${PORT}`));
+server.listen(PORT, HOST, () => console.log(`AudiFox agent worker ready at http://${HOST}:${PORT}`));
 
 function shutdown(signal) {
-  console.log(`${signal} received; stopping DropSeo agent worker.`);
+  console.log(`${signal} received; stopping AudiFox agent worker.`);
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(1), 10_000).unref();
 }
