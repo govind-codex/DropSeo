@@ -2,6 +2,7 @@ import dns from "node:dns/promises";
 import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
+import { ownerContext, ownerMemoryDirectory } from "./owner-context.mjs";
 import { randomUUID } from "node:crypto";
 import { chromium } from "playwright-core";
 import { assessGoalCompletion, assessVerification } from "./evaluation.mjs";
@@ -96,7 +97,8 @@ export async function browserAvailable() {
 
 function runOutputDirectory(runId) {
   const root = process.env.VERCEL === "1" ? path.join(os.tmpdir(), "dropseo-runs") : path.join(process.cwd(), "outputs", "runs");
-  return runId ? path.join(root, runId) : root;
+  const scopedRoot = ownerMemoryDirectory(root);
+  return runId ? path.join(scopedRoot, runId) : scopedRoot;
 }
 
 async function askGemini(prompt, schema, attempts = 2) {
@@ -447,6 +449,11 @@ async function webcmdScreenshotEvent(base64, runId, label, url) {
 }
 
 export async function runAgent(input, res) {
+  if (!input.ownerId) throw new Error("An authenticated investigation owner is required.");
+  return ownerContext.run(String(input.ownerId), () => runOwnedAgent(input, res));
+}
+
+async function runOwnedAgent(input, res) {
   const runId = randomUUID();
   const workflow = ["autonomous", "journey", "performance", "verify"].includes(input.workflow) ? input.workflow : "autonomous";
   const goal = String(input.goal || "").slice(0, 500);
@@ -456,11 +463,11 @@ export async function runAgent(input, res) {
   emit(res, { type: "activity", status: "running", title: "Validating target and loading website memory", detail: String(input.url || "") });
   const target = await validatePublicUrl(input.url);
   const requestedWorkflowId = String(input.workflowId || "").slice(0, 100);
-  const previousRun = await previousRunForDomain(target.hostname);
+  const previousRun = input.baselineResult || await previousRunForDomain(target.hostname);
   const webcmdEnabled = webcmdRuntimeEnabled() && (process.env.VERCEL !== "1" || process.env.WEBCMD_ENABLE_SERVERLESS === "true");
   const webcmdInfo = webcmdEnabled ? await getWebcmdInfo() : { available: false, version: null, reason: "Disabled by WEBCMD_ENABLED." };
-  let knownWorkflow = requestedWorkflowId ? await getWorkflow(target.hostname, requestedWorkflowId) : await findWorkflow(target.hostname, goal, workflow);
-  const verificationBaseline = workflow === "verify" ? knownWorkflow : null;
+  let knownWorkflow = input.baselineResult?.savedWorkflow?.id === requestedWorkflowId ? input.baselineResult.savedWorkflow : requestedWorkflowId ? await getWorkflow(target.hostname, requestedWorkflowId) : await findWorkflow(target.hostname, goal, workflow);
+  const verificationBaseline = workflow === "verify" && requestedWorkflowId ? knownWorkflow : null;
   let webcmdExecution = null;
   let webcmdExploration = null;
   let regressionDetected = false;
@@ -636,7 +643,10 @@ export async function runAgent(input, res) {
     }
     if (learnedWorkflow) findings.forEach((finding) => { finding.workflowId = learnedWorkflow.id; });
     findings.forEach((finding) => emit(res, { type: "finding", finding }));
-    const result = { runId, workflow, goal, status: "completed", completedAt: new Date().toISOString(), profile, outcome: finalOutcome, diagnosis, visitedPages: [...visited], actions: history, goalEvaluation: workflow === "journey" ? goalEvaluation : undefined, verification: verification || undefined, performance, auditSnapshot: { titlePresent: Boolean(observation.title), metaDescriptionPresent: Boolean(observation.description), canonicalPresent: Boolean(observation.canonical), h1Count: observation.headings.filter((item) => item.level === "H1").length }, regressions: { workflow: regressionDetected, metrics: metricRegressions.map((item) => ({ metric: item.metric, previous: item.previous, current: item.current })) }, findings, browserIntelligence: { webcmd: webcmdInfo, mode: webcmdExecution?.passed ? "reused" : webcmdExploration ? "explored" : "playwright-fallback", workflow: learnedWorkflow ? { id: learnedWorkflow.id, name: learnedWorkflow.name, status: learnedWorkflow.status, successRate: learnedWorkflow.successRate, steps: learnedWorkflow.steps.length } : null, regressionDetected: regressionDetected || metricRegressions.length > 0, partialEvidence: pageSessionEnded }, safety: { blockedActions: history.filter((item) => item.blocked).length, domainRestricted: true, sensitiveFieldsProtected: true, consequentialActionsProhibited: true }, durationMs: Date.now() - startedAt };
+    const checkedFindings = baseFindings(observation, performance, networkFailures, consoleErrors);
+    const checkNames = ["Page title is missing", "Meta description is missing", "Meta description length is suboptimal", "Page title length is suboptimal", "Canonical URL is missing", "Page is excluded from search indexing", "Main heading structure is unclear", "Document language is missing", "Interactive controls have no accessible name", "Images are missing alt attributes", "Form controls lack accessible labels", "Largest content appears late", "Layout shifts exceed the recommended threshold", "Server response is slow", "Page transfer size is heavy", "An image is substantially oversized", "High script count may delay interaction", "Network requests failed during the journey", "Browser console errors were observed"];
+    const checkEvidence = pageSessionEnded ? [] : [{ url: observation.url, checks: checkNames.filter((name) => !["Largest content appears late", "Layout shifts exceed the recommended threshold"].includes(name) || performance.vitals.lcp > 0).map((name) => ({ name, pass: !checkedFindings.some((finding) => finding.title === name) })) }];
+    const result = { savedWorkflow: learnedWorkflow || knownWorkflow || undefined, checkEvidence, runId, workflow, goal, status: "completed", completedAt: new Date().toISOString(), profile, outcome: finalOutcome, diagnosis, visitedPages: [...visited], actions: history, goalEvaluation: workflow === "journey" ? goalEvaluation : undefined, verification: verification || undefined, performance, auditSnapshot: { titlePresent: Boolean(observation.title), metaDescriptionPresent: Boolean(observation.description), canonicalPresent: Boolean(observation.canonical), h1Count: observation.headings.filter((item) => item.level === "H1").length }, regressions: { workflow: regressionDetected, metrics: metricRegressions.map((item) => ({ metric: item.metric, previous: item.previous, current: item.current })) }, findings, browserIntelligence: { webcmd: webcmdInfo, mode: webcmdExecution?.passed ? "reused" : webcmdExploration ? "explored" : "playwright-fallback", workflow: learnedWorkflow ? { id: learnedWorkflow.id, name: learnedWorkflow.name, status: learnedWorkflow.status, successRate: learnedWorkflow.successRate, steps: learnedWorkflow.steps.length } : null, regressionDetected: regressionDetected || metricRegressions.length > 0, partialEvidence: pageSessionEnded }, safety: { blockedActions: history.filter((item) => item.blocked).length, domainRestricted: true, sensitiveFieldsProtected: true, consequentialActionsProhibited: true }, durationMs: Date.now() - startedAt };
     await fs.mkdir(runOutputDirectory(), { recursive: true });
     await fs.writeFile(path.join(runOutputDirectory(), `${runId}.json`), JSON.stringify(result, null, 2));
     emit(res, { type: "complete", result });

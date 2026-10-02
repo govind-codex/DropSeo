@@ -14,6 +14,7 @@
     "webcmd:doctor": "webcmd doctor -f json",
     "test": "node --test agent/**/*.test.mjs",
     "test:auth": "node --test scripts/auth.test.mjs",
+    "test:investigations": "node --test scripts/investigations.test.mjs",
     "build": "vite build",
     "build:next": "next build",
     "start": "next start",

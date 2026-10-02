@@ -1,3 +1,4 @@
+import { ownerMemoryDirectory } from "../owner-context.mjs";
 import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -45,7 +46,7 @@ export async function runWebcmdCommand(args, options = {}) {
     let timer;
     const child = spawn(command, [...prefix, ...args], {
       cwd: process.cwd(),
-      env: { ...process.env, NO_COLOR: "1", FORCE_COLOR: "0" },
+      env: { ...process.env, WEBCMD_CONFIG_DIR: ownerMemoryDirectory(path.resolve(process.env.WEBCMD_CONFIG_DIR || ".data/webcmd-config")), WEBCMD_CACHE_DIR: ownerMemoryDirectory(path.resolve(process.env.WEBCMD_CACHE_DIR || ".data/webcmd-cache")), NO_COLOR: "1", FORCE_COLOR: "0" },
       windowsHide: true,
       shell: false,
       stdio: [options.stdin == null ? "ignore" : "pipe", "pipe", "pipe"],
