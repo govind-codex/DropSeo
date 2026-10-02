@@ -1,3 +1,4 @@
+import { ownerMemoryDirectory } from "../owner-context.mjs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
@@ -8,9 +9,9 @@ import { runWebcmdCommand } from "./client.mjs";
 const domainWrites = new Map();
 
 function memoryDirectory() {
-  if (process.env.WEBCMD_WORKFLOW_DIR) return path.resolve(process.env.WEBCMD_WORKFLOW_DIR);
+  if (process.env.WEBCMD_WORKFLOW_DIR) return ownerMemoryDirectory(path.resolve(process.env.WEBCMD_WORKFLOW_DIR));
   const base = process.env.VERCEL === "1" ? path.join(os.tmpdir(), "dropseo") : path.join(process.cwd(), "outputs");
-  return path.join(base, "workflows");
+  return ownerMemoryDirectory(path.join(base, "workflows"));
 }
 
 function domainFile(domain) {

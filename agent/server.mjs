@@ -61,7 +61,7 @@ const server = http.createServer(async (req, res) => {
     return sendJson(res, browser ? 200 : 503, { ok: browser, browser, webcmd });
   }
   if (req.method === "POST" && req.url === "/run") {
-    if (process.env.AGENT_WORKER_TOKEN && req.headers.authorization !== `Bearer ${process.env.AGENT_WORKER_TOKEN}`) {
+    if (!process.env.AGENT_WORKER_TOKEN || req.headers.authorization !== `Bearer ${process.env.AGENT_WORKER_TOKEN}`) {
       return sendJson(res, 401, { error: "Unauthorized." });
     }
     try {

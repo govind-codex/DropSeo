@@ -1,4 +1,6 @@
 import { analyzeAuthenticatedWebsite as analyzeWebsite } from "@/lib/website-analysis";
+import { getInvestigation, saveInvestigation, type Investigation } from "@/lib/investigations";
+import { compareInvestigations } from "@/lib/investigation-comparison";
 import { getSession, validMutationOrigin } from "@/lib/auth";
 
 export const runtime = "nodejs";
@@ -9,6 +11,9 @@ type AgentInput = {
   workflow?: "autonomous" | "journey" | "performance" | "verify";
   goal?: string;
   workflowId?: string;
+  investigationId?: string;
+  findingId?: string;
+  referenceUrls?: string[];
 };
 
 type AuditCheck = {
@@ -49,35 +54,59 @@ export function GET() {
 }
 
 export async function POST(request: Request) {
-  if (!(await getSession())) return Response.json({ error: "Sign in with Google to start an investigation." }, { status: 401 });
+  const user = await getSession();
+  if (!user) return Response.json({ error: "Sign in with Google to start an investigation." }, { status: 401 });
   if (!validMutationOrigin(request)) return Response.json({ error: "Invalid request origin." }, { status: 403 });
+  let pendingRecord: Investigation | undefined;
   try {
     const payload = await request.text();
-    const input = JSON.parse(payload || "{}") as AgentInput;
+    let input = JSON.parse(payload || "{}") as AgentInput;
+    let reference: Investigation | null = null;
+    if (input.workflow === "verify") {
+      if (!input.investigationId) return Response.json({ error: "Open a saved investigation to verify its fixes." }, { status: 400 });
+      reference = await getInvestigation(user.id, input.investigationId);
+      if (!reference) return Response.json({ error: "Investigation not found." }, { status: 404 });
+      // Follow the immutable original, even when verifying a previous verification.
+      if (reference.referenceId) reference = await getInvestigation(user.id, reference.referenceId);
+      if (!reference?.result) return Response.json({ error: "Wait for the original investigation to finish before verifying." }, { status: 409 });
+      const findings = reference.result.findings as Array<{ id: string; title: string; expected: string; workflowId?: string }>;
+      const selected = input.findingId ? findings.find((item) => item.id === input.findingId) : undefined;
+      if (input.findingId && !selected) return Response.json({ error: "Finding not found in the original investigation." }, { status: 404 });
+      input = { url: reference.url, workflow: "verify", goal: selected ? `${selected.title}. Expected behavior: ${selected.expected}` : reference.goal,
+        referenceUrls: reference.result.visitedPages as string[], workflowId: selected?.workflowId || (reference.result.browserIntelligence as { workflow?: { id?: string } } | undefined)?.workflow?.id };
+    } else {
+      input = { url: input.url, workflow: input.workflow, goal: input.goal };
+    }
+    const record: Investigation = { id: crypto.randomUUID(), userId: user.id, url: String(input.url || ""), workflow: input.workflow || "autonomous", goal: String(input.goal || ""),
+      status: "running", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), referenceId: reference?.id, events: [] };
+    await saveInvestigation(record);
+    pendingRecord = record;
     const workerUrl = process.env.AGENT_WORKER_URL?.trim();
     const useExternalBrowser = Boolean(workerUrl) && process.env.AGENT_BROWSER_MODE !== "portable";
 
     if (useExternalBrowser && workerUrl) {
       const token = process.env.AGENT_WORKER_TOKEN;
+      if (!token) throw new Error("The browser worker requires a shared authentication token.");
       const upstream = await fetch(new URL("/run", workerUrl), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: payload,
-        signal: request.signal,
+        body: JSON.stringify({ ...input, ownerId: user.id, baselineResult: reference?.result }),
       });
 
       if (!upstream.ok || !upstream.body) {
         const message = await upstream.text();
+        record.status = "error"; record.error = message || "Browser worker unavailable."; await saveInvestigation(record);
         return Response.json({ error: message || "The browser worker could not start this run." }, { status: upstream.status || 502 });
       }
-      return new Response(upstream.body, { headers: streamHeaders() });
+      return persistStream(upstream, record, reference);
     }
 
-    return portableAnalysisStream(request, input);
+    return persistStream(portableAnalysisStream(request, input), record, reference);
   } catch (error) {
+    if (pendingRecord) { pendingRecord.status = "error"; pendingRecord.error = error instanceof Error ? error.message : "Unable to start investigation."; await saveInvestigation(pendingRecord).catch(() => {}); }
     return Response.json({ error: error instanceof Error ? error.message : "Unable to start the website analysis." }, { status: 400 });
   }
 }
@@ -115,7 +144,7 @@ function portableAnalysisStream(request: Request, input: AgentInput) {
         if (!analysisResponse.ok) throw new Error(analysis.error || "The website could not be analyzed.");
 
         const analyses = [analysis];
-        const pageLinks = selectInvestigationLinks(analysis.links || [], analysis.url, input.goal || "").slice(0, 3);
+        const pageLinks = (input.referenceUrls ? input.referenceUrls.filter((url) => url !== analysis.url && new URL(url).origin === new URL(analysis.url).origin) : selectInvestigationLinks(analysis.links || [], analysis.url, input.goal || "")).slice(0, 3);
         push({ type: "snapshot", image: screenshotUrl(analysis.url), url: analysis.url, source: "rendered-page" });
         push({ type: "activity", status: "complete", title: "Homepage evidence collected", detail: `${analysis.checks.length} checks completed and a rendered screenshot requested.` });
         push({
@@ -153,17 +182,7 @@ function portableAnalysisStream(request: Request, input: AgentInput) {
         const findings = aggregateFindings(analyses);
 
         if (workflow === "verify") {
-          findings.unshift({
-            id: crypto.randomUUID(),
-            category: "Verification",
-            severity: "high",
-            title: "A browser replay is required to verify this fix",
-            expected: String(input.goal || "The previous behavior should pass during an exact replay."),
-            observed: "The portable analyzer collected current page evidence but cannot replay a saved browser workflow.",
-            recommendation: "Connect the live browser worker, then rerun the saved finding or workflow.",
-            confidence: "verified",
-            evidenceType: "capability-check",
-          });
+          push({ type: "activity", status: "warning", title: "Browser replay unavailable", detail: "Technical checks are compared with the original report. Interactive behavior needs matching browser replay evidence." });
         }
 
         for (const win of analysis.ai?.quickWins || []) {
@@ -190,7 +209,7 @@ function portableAnalysisStream(request: Request, input: AgentInput) {
           : workflow === "performance"
             ? `Measured server and document response evidence across ${analyses.length} pages. Browser-rendered LCP, CLS and long-task measurements require the live browser worker.`
             : workflow === "verify"
-              ? "The fix was not marked verified because no saved browser workflow was replayed."
+              ? "Compared fresh technical checks with the original investigation. See the issue-by-issue verification below."
               : defaultOutcome;
         const result = {
           runId,
@@ -208,6 +227,7 @@ function portableAnalysisStream(request: Request, input: AgentInput) {
             vitals: { lcp: 0, cls: 0, longTasks: 0 },
           },
           findings,
+          checkEvidence: analyses.map((item) => ({ url: item.url, checks: item.checks })),
           safety: { blockedActions: 0, domainRestricted: true, sensitiveFieldsProtected: true },
           durationMs: Date.now() - startedAt,
         };
@@ -295,4 +315,49 @@ function aggregateFindings(analyses: Analysis[]) {
       confidence: "verified",
       evidenceType: "multi-page + screenshot",
     }));
+}
+
+function persistStream(response: Response, record: Investigation, reference: Investigation | null) {
+  const encoder = new TextEncoder();
+  let disconnected = false;
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send = (event: Record<string, unknown>) => { if (!disconnected) controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`)); };
+      send({ type: "saved", investigationId: record.id });
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      async function accept(event: Record<string, unknown>) {
+        if (event.type === "complete") {
+          const result = event.result as Record<string, unknown>;
+          if (reference) result.comparison = compareInvestigations(reference, result);
+          record.result = result; record.status = "completed";
+        }
+        if (event.type === "error") { record.status = "error"; record.error = String(event.error); }
+        record.events.push(event);
+        // Persist before delivering so refreshes and disconnected clients keep all evidence.
+        await saveInvestigation(record);
+        send(event);
+      }
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+          const lines = buffer.split("\n"); buffer = lines.pop() || "";
+          for (const line of lines) if (line.trim()) await accept(JSON.parse(line));
+          if (done) break;
+        }
+        if (buffer.trim()) await accept(JSON.parse(buffer));
+        if (record.status === "running") throw new Error("The investigation ended before a report was completed.");
+      } catch (error) {
+        record.status = "error"; record.error = error instanceof Error ? error.message : "Investigation interrupted.";
+        const event = { type: "error", error: record.error, at: new Date().toISOString() };
+        record.events.push(event);
+        await saveInvestigation(record).catch(() => {});
+        send(event);
+      } finally { reader.releaseLock(); if (!disconnected) controller.close(); }
+    },
+    cancel() { disconnected = true; },
+  });
+  return new Response(stream, { headers: { ...streamHeaders(), "X-Investigation-ID": record.id } });
 }
