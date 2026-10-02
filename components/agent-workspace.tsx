@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import findingStyles from "./finding-card.module.css";
 import {
   Activity,
   AlertTriangle,
@@ -253,7 +254,7 @@ export default function AgentWorkspace({ user }: { user: { name: string; email: 
 
         {(status === "completed" || findings.length > 0) && <section className="results"><div className="results-heading"><div><span className="eyebrow"><Search size={13} /> EVIDENCE-BACKED REPORT</span><h2>{result?.outcome || "Findings collected during the run"}</h2><p>{result ? `${result.visitedPages.length} pages · ${result.actions.length} evidence actions · ${(result.durationMs / 1000).toFixed(1)} seconds` : "Findings appear as they are verified."}</p></div>{result && <button className="export-button" onClick={exportReport}><Download /> Export evidence report</button>}</div>
           {result && <div className="metric-grid"><Metric icon={<Gauge />} label="LCP observed" value={result.performance.vitals.lcp ? `${(result.performance.vitals.lcp / 1000).toFixed(2)}s` : "—"} /><Metric icon={<Zap />} label="Response start" value={`${(result.performance.ttfb / 1000).toFixed(2)}s`} /><Metric icon={<FileSearch />} label="Resources" value={String(result.performance.resources)} /><Metric icon={<ShieldCheck />} label="Blocked actions" value={String(result.safety.blockedActions)} /></div>}
-          <div className="findings-list">{findings.length ? findings.map((finding) => <article className="finding-card" key={finding.id}><div className="finding-severity"><span className={finding.severity}>{finding.severity}</span><small>{finding.category} · {finding.confidence}</small></div><div className="finding-body"><h3>{finding.title}</h3><div className="expect-grid"><div><span>EXPECTED</span><p>{finding.expected}</p></div><div><span>OBSERVED</span><p>{finding.observed}</p></div></div><div className="fix"><FlaskConical /><div><span>RECOMMENDED FIX</span><p>{finding.recommendation}</p></div></div></div><div className="finding-actions"><span><Eye /> {finding.evidenceType}</span><button onClick={() => verifyFinding(finding)}><RefreshCw /> Verify fix</button></div></article>) : <div className="no-findings"><Check /><strong>No material issues were verified in this bounded run.</strong></div>}</div>
+          <div className="findings-list">{findings.length ? findings.map((finding) => <FindingCard finding={finding} key={finding.id} onVerify={verifyFinding} />) : <div className="no-findings"><Check /><strong>No material issues were verified in this bounded run.</strong></div>}</div>
         </section>}
 
         {recentRuns.length > 0 && <section className="history-section"><div className="results-heading"><div><span className="eyebrow"><History size={13} /> WEBSITE MEMORY</span><h2>Recent investigations</h2></div></div><div className="history-list">{recentRuns.map((run) => <article key={run.runId}><span className="history-icon"><Globe2 /></span><div><strong>{hostnameFor(run.url || "")}</strong><p>{run.outcome}</p></div><span>{run.workflow}</span><b>{run.findings} findings</b><small>{new Date(run.completedAt).toLocaleString()}</small><ChevronRight /></article>)}</div></section>}
@@ -265,4 +266,48 @@ export default function AgentWorkspace({ user }: { user: { name: string; email: 
 
 function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return <div className="metric"><span>{icon}</span><div><small>{label}</small><strong>{value}</strong></div></div>;
+}
+
+function FindingCard({ finding, onVerify }: { finding: Finding; onVerify: (finding: Finding) => void }) {
+  const severity = finding.severity.toLowerCase();
+  const severityLabel = severity.charAt(0).toUpperCase() + severity.slice(1);
+  const severityClass = severity === "high" ? findingStyles.high : severity === "medium" ? findingStyles.medium : severity === "resolved" ? findingStyles.resolved : "";
+
+  return (
+    <article className={findingStyles.card}>
+      <div className={findingStyles.header}>
+        <div className={findingStyles.status}>
+          <span className={`${findingStyles.severityPill} ${severityClass}`}><AlertTriangle aria-hidden="true" />{severityLabel} priority</span>
+          <span className={findingStyles.category}>{finding.category}</span>
+          <span className={findingStyles.confidence}><i aria-hidden="true" />{finding.confidence}</span>
+        </div>
+        <h3>{finding.title}</h3>
+      </div>
+
+      <div className={findingStyles.compare} aria-label="Expected and observed behavior">
+        <section className={`${findingStyles.comparisonPanel} ${findingStyles.expected}`}>
+          <span className={findingStyles.comparisonLabel}><Check aria-hidden="true" />Expected</span>
+          <p>{finding.expected}</p>
+        </section>
+        <section className={`${findingStyles.comparisonPanel} ${findingStyles.observed}`}>
+          <span className={findingStyles.comparisonLabel}><Eye aria-hidden="true" />What AudiFox found</span>
+          <p>{finding.observed}</p>
+        </section>
+      </div>
+
+      <div className={findingStyles.fix}>
+        <span className={findingStyles.fixIcon} aria-hidden="true"><FlaskConical /></span>
+        <div><span>Recommended next step</span><p>{finding.recommendation}</p></div>
+      </div>
+
+      <div className={findingStyles.footer}>
+        <span className={findingStyles.evidenceLabel}><Eye aria-hidden="true" />Evidence source <strong>{finding.evidenceType}</strong></span>
+        <button type="button" onClick={() => onVerify(finding)} aria-label={`Verify fix for ${finding.title}`}>
+          <RefreshCw aria-hidden="true" />
+          <span><strong>Verify this fix</strong><small>Run the same check again</small></span>
+          <ArrowRight className={findingStyles.verifyArrow} aria-hidden="true" />
+        </button>
+      </div>
+    </article>
+  );
 }
