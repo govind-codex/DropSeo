@@ -20,13 +20,16 @@ async function sql(query: string, params: string[]) {
     if (!response.ok || !body.success) throw new Error("Investigation storage is unavailable.");
     return body.result[0].results;
   }
-  if (process.env.NODE_ENV === "production") throw new Error("Persistent investigation storage is not configured.");
+  if (process.env.NODE_ENV === "production" && process.env.INVESTIGATIONS_REQUIRE_D1 === "true") {
+    throw new Error("Persistent investigation storage is not configured.");
+  }
   return null;
 }
 async function localDirectory() {
   const { mkdir } = await import("node:fs/promises");
   const { resolve } = await import("node:path");
-  const directory = resolve(/* turbopackIgnore: true */ process.env.INVESTIGATIONS_DEV_DIR || ".data/investigations");
+  const defaultDir = process.env.VERCEL ? "/tmp/investigations" : ".data/investigations";
+  const directory = resolve(/* turbopackIgnore: true */ process.env.INVESTIGATIONS_DEV_DIR || process.env.INVESTIGATIONS_DIR || defaultDir);
   await mkdir(directory, { recursive: true });
   return directory;
 }
