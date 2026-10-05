@@ -9,9 +9,11 @@ packaged migrations during deployment.
 
 For Next.js deployments (including Vercel), attach a MongoDB database and expose
 its server-side connection string as `MONGODB_URI`. `MONGODB_DATABASE` optionally
-selects the database name and defaults to `audifox`. The `investigations` and
+selects the database name and defaults to `dropseo`. The `investigations` and
 `investigation_events` collections and their indexes are created automatically
-on the first database request.
+on the first database request. Use Atlas's SRV connection string, create a
+database user, and permit the Vercel deployment in Atlas Network Access. The
+MongoDB Atlas Vercel integration can configure `MONGODB_URI` automatically.
 
 Cloudflare D1 remains supported through `CLOUDFLARE_ACCOUNT_ID`,
 `INVESTIGATIONS_D1_ID`, and `INVESTIGATIONS_D1_TOKEN`. The token needs D1

@@ -23,14 +23,46 @@ export type InvestigationDocumentStore = {
 let databasePromise: Promise<Db> | null = null;
 let indexesPromise: Promise<void> | null = null;
 
+function mongoStorageError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error("MongoDB investigation storage error:", message);
+  if (/SSL|TLS|alert internal|ERR_SSL/i.test(message)) {
+    return new Error("Could not establish a secure MongoDB connection. Verify the Atlas SRV connection string and Atlas Network Access settings.");
+  }
+  if (/auth|authentication|bad auth/i.test(message)) {
+    return new Error("MongoDB authentication failed. Verify the database username and password in MONGODB_URI.");
+  }
+  if (/ENOTFOUND|querySrv|DNS/i.test(message)) {
+    return new Error("The MongoDB cluster address could not be resolved. Copy the current Atlas SRV connection string into MONGODB_URI.");
+  }
+  return new Error("MongoDB investigation storage is temporarily unavailable.");
+}
+
 function mongoDatabase() {
   const uri = process.env.MONGODB_URI;
   if (!uri) return null;
   if (!databasePromise) {
-    const client = new MongoClient(uri, { maxPoolSize: 5 });
-    databasePromise = client.connect().then((connected) => connected.db(process.env.MONGODB_DATABASE || "audifox"));
+    const client = new MongoClient(uri, {
+      appName: "audifox-vercel",
+      maxIdleTimeMS: 5_000,
+      maxPoolSize: 5,
+      serverSelectionTimeoutMS: 10_000,
+    });
+    databasePromise = client.connect()
+      .then((connected) => connected.db(process.env.MONGODB_DATABASE || "dropseo"))
+      .catch(async (error) => {
+        databasePromise = null;
+        indexesPromise = null;
+        await client.close().catch(() => undefined);
+        throw error;
+      });
   }
   return databasePromise;
+}
+
+async function withMongoErrors<T>(operation: () => Promise<T>) {
+  try { return await operation(); }
+  catch (error) { throw mongoStorageError(error); }
 }
 
 async function initializeDatabase(db: Db) {
@@ -47,7 +79,7 @@ export function investigationDocumentStore(): InvestigationDocumentStore | null 
   const pendingDatabase = mongoDatabase();
   if (!pendingDatabase) return null;
   return {
-    async save(value) {
+    async save(value) { return await withMongoErrors(async () => {
       const record = value as Record<string, unknown> & { id: string; userId: string; createdAt: string; events: Record<string, unknown>[] };
       const db = await pendingDatabase;
       await initializeDatabase(db);
@@ -64,8 +96,8 @@ export function investigationDocumentStore(): InvestigationDocumentStore | null 
           upsert: true,
         },
       })), { ordered: false });
-    },
-    async get(userId, id) {
+    }); },
+    async get(userId, id) { return await withMongoErrors(async () => {
       const db = await pendingDatabase;
       await initializeDatabase(db);
       const record = await db.collection<StoredInvestigation>("investigations").findOne({ _id: id, userId });
@@ -74,12 +106,12 @@ export function investigationDocumentStore(): InvestigationDocumentStore | null 
       const { _id, ...metadata } = record;
       void _id;
       return { ...metadata, events: events.map((event) => event.data) };
-    },
-    async list(userId) {
+    }); },
+    async list(userId) { return await withMongoErrors(async () => {
       const db = await pendingDatabase;
       await initializeDatabase(db);
       const records = await db.collection<StoredInvestigation>("investigations").find({ userId }).sort({ createdAt: -1 }).toArray();
       return records.map(({ _id, ...record }) => { void _id; return { ...record, events: [] }; });
-    },
+    }); },
   };
 }
