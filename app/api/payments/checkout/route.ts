@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
       metadata: { audifox_user_id: user.id, audifox_plan: plan },
       return_url: config.returnUrl,
       cancel_url: `${authConfig().origin}/checkout?status=cancelled`,
-      customization: { theme: "light", theme_config: { pay_button_text: `Subscribe to ${plan.startsWith("pro") ? "Pro" : "Studio"}` } },
+      customization: { theme: "light", theme_config: { pay_button_text: `Subscribe to ${plan === "pro" ? "Pro" : "Studio"}` } },
       feature_flags: { allow_discount_code: true },
     }),
   });

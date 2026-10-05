@@ -13,7 +13,6 @@ export default async function LandingPage() {
       id: "free",
       name: "FREE",
       price: "0",
-      yearlyPrice: "0",
       period: "month",
       features: ["3 investigations each month", "Up to 4 pages per investigation", "Evidence-backed findings", "Downloadable reports"],
       description: "For trying AudiFox on your own site.",
@@ -25,7 +24,6 @@ export default async function LandingPage() {
       id: "pro",
       name: "PRO",
       price: "9",
-      yearlyPrice: "7",
       period: "month",
       features: ["50 investigations each month", "Up to 15 pages per investigation", "Journey and performance workflows", "Verification runs and report exports"],
       description: "For growing sites that need regular checks.",
@@ -37,7 +35,6 @@ export default async function LandingPage() {
       id: "studio",
       name: "STUDIO",
       price: "24",
-      yearlyPrice: "19",
       period: "month",
       features: ["200 investigations each month", "Up to 30 pages per investigation", "Five workspace members", "Priority investigation queue"],
       description: "For teams managing multiple websites.",
@@ -86,7 +83,7 @@ export default async function LandingPage() {
           plans={pricingPlans}
           authenticated={Boolean(user)}
           title="Start small. Investigate deeper when you need to."
-          description={"Every plan keeps AudiFox in safe mode and brings back evidence you can act on.\nSwitch to annual billing to save 20%."}
+          description="Every plan keeps AudiFox in safe mode and brings back evidence you can act on."
         />
         <section className="landing-how" id="how-it-works" aria-labelledby="how-heading"><div><span className="landing-eyebrow">FROM URL TO INSIGHT</span><h2 id="how-heading">Your next investigation<br />is three steps away.</h2><a href={user ? "/dashboard" : "/api/auth/google"} className="text-cta" target={user ? undefined : "_top"}>Open your workspace <ArrowRight size={18} /></a></div><ol><li><span>1</span><div><h3>Sign in with Google</h3><p>Securely enter your AudiFox workspace.</p></div></li><li><span>2</span><div><h3>Give the agent a website</h3><p>Paste a public URL and choose a workflow.</p></div></li><li><span>3</span><div><h3>Turn findings into fixes</h3><p>Follow the investigation and review the evidence.</p></div></li></ol></section>
       </main>

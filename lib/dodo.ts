@@ -1,4 +1,4 @@
-export const DODO_PLANS = ["pro", "studio", "pro-yearly", "studio-yearly"] as const;
+export const DODO_PLANS = ["pro", "studio"] as const;
 
 export type DodoPlan = (typeof DODO_PLANS)[number];
 
@@ -14,13 +14,7 @@ function configuredValue(name: string) {
 
 export function dodoCheckoutConfig(plan: DodoPlan) {
   const bearerToken = configuredValue("DODO_PAYMENTS_API_KEY");
-  const productIdVariable = {
-    pro: "DODO_PRO_PRODUCT_ID",
-    studio: "DODO_STUDIO_PRODUCT_ID",
-    "pro-yearly": "DODO_PRO_YEARLY_PRODUCT_ID",
-    "studio-yearly": "DODO_STUDIO_YEARLY_PRODUCT_ID",
-  }[plan];
-  const productId = configuredValue(productIdVariable);
+  const productId = configuredValue(plan === "pro" ? "DODO_PRO_PRODUCT_ID" : "DODO_STUDIO_PRODUCT_ID");
   const returnUrl = configuredValue("DODO_PAYMENTS_RETURN_URL");
   const environment = process.env.DODO_PAYMENTS_ENVIRONMENT === "live_mode" ? "live_mode" : "test_mode";
 
