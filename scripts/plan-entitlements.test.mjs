@@ -1,0 +1,62 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { transpileModule, ModuleKind, ScriptTarget } from "typescript";
+
+const dataUrl = (source) => `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
+let source = readFileSync(new URL("../lib/plan-entitlements.ts", import.meta.url), "utf8");
+const runtimeUrl = dataUrl("export function planDocumentStore() { return globalThis.__planStore; }");
+source = source.replaceAll('"@/lib/investigation-runtime"', JSON.stringify(runtimeUrl));
+const moduleUrl = dataUrl(transpileModule(source, { compilerOptions: { module: ModuleKind.ESNext, target: ScriptTarget.ES2022 } }).outputText);
+const plans = await import(moduleUrl);
+
+test("plan access selects the highest active subscription and reports monthly usage", async () => {
+  globalThis.__planStore = {
+    async getEntitlements() {
+      return [
+        { userId: "user", plan: "pro", status: "cancelled", eventTimestamp: "2026-10-05T00:00:00.000Z" },
+        { userId: "user", plan: "studio", status: "active", eventTimestamp: "2026-10-04T00:00:00.000Z" },
+      ];
+    },
+    async getUsage() { return 12; },
+  };
+  const usage = await plans.getPlanUsage("user");
+  assert.equal(usage.plan, "studio");
+  assert.equal(usage.limit, 200);
+  assert.equal(usage.maxPages, 30);
+  assert.equal(usage.remaining, 188);
+});
+
+test("an expired or inactive subscription falls back to Free", async () => {
+  globalThis.__planStore = {
+    async getEntitlements() { return [{ userId: "user", plan: "pro", status: "on_hold", eventTimestamp: "2026-10-05T00:00:00.000Z" }]; },
+    async getUsage() { return 3; },
+  };
+  const usage = await plans.getPlanUsage("user");
+  assert.equal(usage.plan, "free");
+  assert.equal(usage.remaining, 0);
+});
+
+test("verified Dodo subscription payloads persist the checkout user and plan", async () => {
+  let saved;
+  globalThis.__planStore = {
+    async setEntitlement(record) { saved = record; },
+  };
+  await plans.syncDodoSubscription({
+    type: "subscription.active",
+    timestamp: new Date("2026-10-06T10:00:00.000Z"),
+    data: {
+      payload_type: "Subscription",
+      subscription_id: "sub_123",
+      product_id: "pdt_123",
+      status: "active",
+      customer: { email: "buyer@example.com" },
+      metadata: { audifox_user_id: "user_123", audifox_plan: "pro" },
+    },
+  });
+  assert.equal(saved.userId, "user_123");
+  assert.equal(saved.plan, "pro");
+  assert.equal(saved.status, "active");
+});
+
+test.after(() => { delete globalThis.__planStore; });

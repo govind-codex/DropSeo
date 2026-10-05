@@ -2,6 +2,7 @@ import { analyzeAuthenticatedWebsite as analyzeWebsite } from "@/lib/website-ana
 import { getInvestigation, saveInvestigation, type Investigation } from "@/lib/investigations";
 import { compareInvestigations } from "@/lib/investigation-comparison";
 import { getSession, validMutationOrigin } from "@/lib/auth";
+import { releaseInvestigation, reserveInvestigation, type PlanUsage } from "@/lib/plan-entitlements";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -14,6 +15,7 @@ type AgentInput = {
   investigationId?: string;
   findingId?: string;
   referenceUrls?: string[];
+  maxPages?: number;
 };
 
 type AuditCheck = {
@@ -58,6 +60,8 @@ export async function POST(request: Request) {
   if (!user) return Response.json({ error: "Sign in with Google to start an investigation." }, { status: 401 });
   if (!validMutationOrigin(request)) return Response.json({ error: "Invalid request origin." }, { status: 403 });
   let pendingRecord: Investigation | undefined;
+  let reservation: PlanUsage | undefined;
+  let streamStarted = false;
   try {
     const payload = await request.text();
     let input = JSON.parse(payload || "{}") as AgentInput;
@@ -77,6 +81,16 @@ export async function POST(request: Request) {
     } else {
       input = { url: input.url, workflow: input.workflow, goal: input.goal };
     }
+    const allowance = await reserveInvestigation(user.id, user.email);
+    if (!allowance.allowed) {
+      return Response.json({
+        error: `You have used all ${allowance.usage.limit} ${allowance.usage.planName} investigations for this month.`,
+        code: "PLAN_LIMIT_REACHED",
+        usage: allowance.usage,
+      }, { status: 429 });
+    }
+    reservation = allowance.usage;
+    input.maxPages = allowance.usage.maxPages;
     const record: Investigation = { id: crypto.randomUUID(), userId: user.id, url: String(input.url || ""), workflow: input.workflow || "autonomous", goal: String(input.goal || ""),
       status: "running", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), referenceId: reference?.id, events: [] };
     await saveInvestigation(record);
@@ -99,13 +113,18 @@ export async function POST(request: Request) {
       if (!upstream.ok || !upstream.body) {
         const message = await upstream.text();
         record.status = "error"; record.error = message || "Browser worker unavailable."; await saveInvestigation(record);
+        await releaseInvestigation(user.id, allowance.usage.period);
+        reservation = undefined;
         return Response.json({ error: message || "The browser worker could not start this run." }, { status: upstream.status || 502 });
       }
+      streamStarted = true;
       return persistStream(upstream, record, reference);
     }
 
+    streamStarted = true;
     return persistStream(portableAnalysisStream(request, input), record, reference);
   } catch (error) {
+    if (reservation && !streamStarted) await releaseInvestigation(user.id, reservation.period).catch(() => undefined);
     if (pendingRecord) { pendingRecord.status = "error"; pendingRecord.error = error instanceof Error ? error.message : "Unable to start investigation."; await saveInvestigation(pendingRecord).catch(() => {}); }
     return Response.json({ error: error instanceof Error ? error.message : "Unable to start the website analysis." }, { status: 400 });
   }
@@ -131,7 +150,8 @@ function portableAnalysisStream(request: Request, input: AgentInput) {
       };
 
       void (async () => {
-        push({ type: "run", runId, workflow, status: "observing", limits: { maxPages: 4, timeoutSeconds: 55 } });
+        const maxPages = Math.max(1, Math.min(30, Number(input.maxPages) || 4));
+        push({ type: "run", runId, workflow, status: "observing", limits: { maxPages, timeoutSeconds: 55 } });
         push({ type: "activity", status: "running", title: "Validating the target", detail: "Confirming this is a public HTTP website." });
         push({ type: "activity", status: "running", title: "Fetching website evidence", detail: String(input.url || "") });
 
@@ -144,7 +164,7 @@ function portableAnalysisStream(request: Request, input: AgentInput) {
         if (!analysisResponse.ok) throw new Error(analysis.error || "The website could not be analyzed.");
 
         const analyses = [analysis];
-        const pageLinks = (input.referenceUrls ? input.referenceUrls.filter((url) => url !== analysis.url && new URL(url).origin === new URL(analysis.url).origin) : selectInvestigationLinks(analysis.links || [], analysis.url, input.goal || "")).slice(0, 3);
+        const pageLinks = (input.referenceUrls ? input.referenceUrls.filter((url) => url !== analysis.url && new URL(url).origin === new URL(analysis.url).origin) : selectInvestigationLinks(analysis.links || [], analysis.url, input.goal || "")).slice(0, maxPages - 1);
         push({ type: "snapshot", image: screenshotUrl(analysis.url), url: analysis.url, source: "rendered-page" });
         push({ type: "activity", status: "complete", title: "Homepage evidence collected", detail: `${analysis.checks.length} checks completed and a rendered screenshot requested.` });
         push({

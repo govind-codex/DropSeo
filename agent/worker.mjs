@@ -458,7 +458,7 @@ async function runOwnedAgent(input, res) {
   const workflow = ["autonomous", "journey", "performance", "verify"].includes(input.workflow) ? input.workflow : "autonomous";
   const goal = String(input.goal || "").slice(0, 500);
   const maxActions = Math.min(14, Math.max(3, Number(input.maxActions) || 10));
-  const maxPages = Math.min(6, Math.max(1, Number(input.maxPages) || 4));
+  const maxPages = Math.min(30, Math.max(1, Number(input.maxPages) || 4));
   emit(res, { type: "run", runId, workflow, status: "preparing", limits: { maxActions, maxPages, timeoutSeconds: 120 } });
   emit(res, { type: "activity", status: "running", title: "Validating target and loading website memory", detail: String(input.url || "") });
   const target = await validatePublicUrl(input.url);

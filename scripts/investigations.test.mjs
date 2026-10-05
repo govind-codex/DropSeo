@@ -31,7 +31,8 @@ test("persistent history, ownership, and repeated verification", async (t) => {
     await new Promise(resolve => setTimeout(resolve, 10));
     return Response.json({ url, title: "Test website", score: 80, checks: globalThis.__historyChecks, ttfb: 30, load: 50, images: 1, scripts: 1, styles: 1, links: [] });
   }`);
-  const replacements = { "@/lib/auth": authUrl, "@/lib/investigations": store.url, "@/lib/investigation-comparison": comparison.url, "@/lib/website-analysis": analyzerUrl };
+  const entitlementUrl = dataUrl(`export async function reserveInvestigation() { return globalThis.__planAllowance || { allowed: true, usage: { plan: "free", planName: "Free", status: "free", used: 1, limit: 3, remaining: 2, maxPages: 4, period: "2026-10", resetsAt: "2026-11-01T00:00:00.000Z" } }; } export async function releaseInvestigation() {}`);
+  const replacements = { "@/lib/auth": authUrl, "@/lib/investigations": store.url, "@/lib/investigation-comparison": comparison.url, "@/lib/website-analysis": analyzerUrl, "@/lib/plan-entitlements": entitlementUrl };
   const detail = (await load("../app/api/investigations/[id]/route.ts", replacements)).module;
   const list = (await load("../app/api/investigations/route.ts", replacements)).module;
   const run = (await load("../app/api/agent/run/route.ts", replacements)).module;
@@ -47,6 +48,13 @@ test("persistent history, ownership, and repeated verification", async (t) => {
       assert.equal((await post({ url: "https://example.com" })).status, 401);
     });
     globalThis.__historyUser = { id: "alice", name: "Alice", email: "alice@example.com" };
+    await t.test("monthly plan limits are enforced before a run is created", async () => {
+      globalThis.__planAllowance = { allowed: false, usage: { plan: "free", planName: "Free", status: "free", used: 3, limit: 3, remaining: 0, maxPages: 4, period: "2026-10", resetsAt: "2026-11-01T00:00:00.000Z" } };
+      const response = await post({ url: "https://example.com/" });
+      assert.equal(response.status, 429);
+      assert.equal((await response.json()).code, "PLAN_LIMIT_REACHED");
+      delete globalThis.__planAllowance;
+    });
     await t.test("completed runs retain every event and the complete result", async () => {
       globalThis.__historyChecks = [check("Title", false), check("Language", false)];
       const response = await post({ url: "https://example.com/", workflow: "autonomous" });
@@ -118,7 +126,7 @@ test("persistent history, ownership, and repeated verification", async (t) => {
   } finally {
     await rm(directory, { recursive: true, force: true });
     for (const [key, value] of Object.entries(savedEnv)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
-    delete globalThis.__historyUser; delete globalThis.__historyOrigin; delete globalThis.__historyChecks;
+    delete globalThis.__historyUser; delete globalThis.__historyOrigin; delete globalThis.__historyChecks; delete globalThis.__planAllowance;
   }
 });
 

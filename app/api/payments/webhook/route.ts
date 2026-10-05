@@ -1,5 +1,6 @@
 import { Webhooks } from "@dodopayments/nextjs";
 import { NextRequest, NextResponse } from "next/server";
+import { syncDodoSubscription } from "@/lib/plan-entitlements";
 
 export const runtime = "nodejs";
 
@@ -12,7 +13,6 @@ export async function POST(request: NextRequest) {
   return Webhooks({
     webhookKey,
     // The adapter verifies every webhook signature before this callback runs.
-    // Persist subscription events here when AudiFox adds its entitlement store.
-    onPayload: async () => undefined,
+    onPayload: syncDodoSubscription,
   })(request);
 }

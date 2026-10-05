@@ -14,6 +14,37 @@ type StoredEvent = {
   data: Record<string, unknown>;
 };
 
+type StoredPlanUsage = {
+  _id: string;
+  userId: string;
+  email: string;
+  period: string;
+  count: number;
+  createdAt: string;
+  updatedAt?: string;
+};
+
+export type StoredPlanEntitlement = {
+  userId: string;
+  email: string;
+  plan: "pro" | "studio";
+  status: string;
+  subscriptionId: string;
+  productId: string;
+  nextBillingDate?: string;
+  pastDueEndsAt?: string;
+  eventTimestamp: string;
+  updatedAt: string;
+};
+
+export type PlanDocumentStore = {
+  getEntitlements(userId: string): Promise<StoredPlanEntitlement[]>;
+  setEntitlement(record: StoredPlanEntitlement): Promise<void>;
+  getUsage(userId: string, period: string): Promise<number>;
+  reserveUsage(userId: string, email: string, period: string, limit: number): Promise<number | null>;
+  releaseUsage(userId: string, period: string): Promise<void>;
+};
+
 export type InvestigationDocumentStore = {
   save(record: unknown): Promise<void>;
   get(userId: string, id: string): Promise<unknown | null>;
@@ -69,8 +100,64 @@ async function initializeDatabase(db: Db) {
   if (!indexesPromise) indexesPromise = Promise.all([
     db.collection<StoredInvestigation>("investigations").createIndex({ userId: 1, createdAt: -1 }),
     db.collection<StoredEvent>("investigation_events").createIndex({ investigationId: 1, sequence: 1 }, { unique: true }),
+    db.collection("plan_usage").createIndex({ userId: 1, period: 1 }, { unique: true }),
+    db.collection("plan_entitlements").createIndex({ userId: 1, eventTimestamp: -1 }),
   ]).then(() => undefined).catch((error) => { indexesPromise = null; throw error; });
   await indexesPromise;
+}
+
+export function planDocumentStore(): PlanDocumentStore | null {
+  const pendingDatabase = mongoDatabase();
+  if (!pendingDatabase) return null;
+  return {
+    async getEntitlements(userId) { return await withMongoErrors(async () => {
+      const db = await pendingDatabase;
+      await initializeDatabase(db);
+      const records = await db.collection<StoredPlanEntitlement & { _id: string }>("plan_entitlements").find({ userId }).sort({ eventTimestamp: -1 }).toArray();
+      return records.map(({ _id, ...entitlement }) => { void _id; return entitlement; });
+    }); },
+    async setEntitlement(record) { return await withMongoErrors(async () => {
+      const db = await pendingDatabase;
+      await initializeDatabase(db);
+      const collection = db.collection<StoredPlanEntitlement & { _id: string }>("plan_entitlements");
+      await collection.updateOne({ _id: record.subscriptionId }, { $setOnInsert: { _id: record.subscriptionId } }, { upsert: true });
+      await collection.updateOne(
+        { _id: record.subscriptionId, $or: [{ eventTimestamp: { $lte: record.eventTimestamp } }, { eventTimestamp: { $exists: false } }] },
+        { $set: record },
+      );
+    }); },
+    async getUsage(userId, period) { return await withMongoErrors(async () => {
+      const db = await pendingDatabase;
+      await initializeDatabase(db);
+      const record = await db.collection<StoredPlanUsage>("plan_usage").findOne({ userId, period });
+      return Math.max(0, Number(record?.count || 0));
+    }); },
+    async reserveUsage(userId, email, period, limit) { return await withMongoErrors(async () => {
+      const db = await pendingDatabase;
+      await initializeDatabase(db);
+      const collection = db.collection<StoredPlanUsage>("plan_usage");
+      const _id = `${userId}:${period}`;
+      await collection.updateOne(
+        { _id },
+        { $setOnInsert: { _id, userId, email, period, count: 0, createdAt: new Date().toISOString() } },
+        { upsert: true },
+      );
+      const reserved = await collection.findOneAndUpdate(
+        { _id, count: { $lt: limit } },
+        { $inc: { count: 1 }, $set: { email, updatedAt: new Date().toISOString() } },
+        { returnDocument: "after" },
+      );
+      return reserved ? Number(reserved.count) : null;
+    }); },
+    async releaseUsage(userId, period) { return await withMongoErrors(async () => {
+      const db = await pendingDatabase;
+      await initializeDatabase(db);
+      await db.collection<StoredPlanUsage>("plan_usage").updateOne(
+        { _id: `${userId}:${period}`, count: { $gt: 0 } },
+        { $inc: { count: -1 }, $set: { updatedAt: new Date().toISOString() } },
+      );
+    }); },
+  };
 }
 
 export function investigationDatabase(): D1Database | null { return null; }

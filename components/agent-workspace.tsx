@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { Investigation } from "@/lib/investigations";
 import type { Comparison } from "@/lib/investigation-comparison";
+import type { PlanUsage } from "@/lib/plan-entitlements";
 import findingStyles from "./finding-card.module.css";
 import {
   Activity,
@@ -82,6 +83,18 @@ export default function AgentWorkspace({ user, investigation }: { user: { name: 
   const [progress, setProgress] = useState(0);
   const [completionPending, setCompletionPending] = useState(false);
   const [startingVerification, setStartingVerification] = useState(false);
+  const [planUsage, setPlanUsage] = useState<PlanUsage | null>(null);
+  const loadPlanUsage = useCallback(async () => {
+    const response = await fetch("/api/usage", { cache: "no-store" });
+    if (response.ok) setPlanUsage(await response.json() as PlanUsage);
+  }, []);
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/usage", { cache: "no-store" }).then(async (response) => {
+      if (response.ok && active) setPlanUsage(await response.json() as PlanUsage);
+    });
+    return () => { active = false; };
+  }, []);
   const handleEvent = useCallback((event: Record<string, unknown>) => {
     if (event.type === "saved") setInvestigationId(String(event.investigationId));
     if (event.type === "activity") setActivities((items) => [...items, { id: `${String(event.at)}-${items.length}`, at: String(event.at), status: event.status as ActivityItem["status"], title: String(event.title), detail: String(event.detail) }]);
@@ -152,7 +165,8 @@ export default function AgentWorkspace({ user, investigation }: { user: { name: 
       setStartingVerification(true);
       try {
         const response = await fetch("/api/agent/run", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ workflow: "verify", investigationId: investigation.referenceId || investigation.id, findingId: override?.findingId }) });
-        if (!response.ok) { const body = await response.json() as { error?: string }; throw new Error(body.error || "Verification could not start."); }
+        if (!response.ok) { const body = await response.json() as { error?: string; usage?: PlanUsage }; if (body.usage) setPlanUsage(body.usage); throw new Error(body.error || "Verification could not start."); }
+        void loadPlanUsage();
         const id = response.headers.get("X-Investigation-ID");
         // The server continues saving the verification after navigation.
         if (id) window.location.assign(`/investigations/${id}`);
@@ -177,7 +191,7 @@ export default function AgentWorkspace({ user, investigation }: { user: { name: 
       const response = await fetch("/api/agent/run", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ url, workflow: activeWorkflow, goal: activeGoal, investigationId, findingId: override?.findingId, maxActions: 10, maxPages: 4 }),
+        body: JSON.stringify({ url, workflow: activeWorkflow, goal: activeGoal, investigationId, findingId: override?.findingId }),
       });
       if (response.status === 401) {
         window.location.assign("/login?error=expired");
@@ -187,13 +201,15 @@ export default function AgentWorkspace({ user, investigation }: { user: { name: 
         const raw = await response.text().catch(() => "");
         let message = "The live analysis service could not start this run.";
         try {
-          const payload = JSON.parse(raw) as { error?: string };
+          const payload = JSON.parse(raw) as { error?: string; usage?: PlanUsage };
+          if (payload.usage) setPlanUsage(payload.usage);
           if (payload.error) message = payload.error;
         } catch {
           if (response.status) message = `The live analysis service returned HTTP ${response.status}. Please try again.`;
         }
         throw new Error(message);
       }
+      void loadPlanUsage();
       setInvestigationId(response.headers.get("X-Investigation-ID") || "");
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -234,14 +250,14 @@ export default function AgentWorkspace({ user, investigation }: { user: { name: 
         <div className="workspace-account"><span className="avatar" aria-hidden="true">{user.name.slice(0, 1).toUpperCase()}</span><span className="account-name" title={user.email}>{user.name}</span><form action="/api/auth/logout" method="post"><button className="signout-button" type="submit">Sign out</button></form></div>
       </header>
       <main className="agent-main">
-        {investigation ? <section className="saved-heading"><div><Link href="/investigations">Back to My Investigations</Link><h1>{hostnameFor(investigation.url)}</h1><p>{new Date(investigation.createdAt).toLocaleString()} | {investigation.workflow} | {status}</p></div><button className="run-button" disabled={status === "running" || startingVerification || !result} onClick={() => startRun(undefined, { workflow: "verify", goal: investigation.goal })}><RefreshCw /> Verify Fix</button></section> : <section className="mission-control">
-          <div className="mission-copy"><span className="eyebrow"><Sparkles size={13} /> AUTONOMOUS WEBSITE INTELLIGENCE</span><h1>Give the agent a website.<br /><em>Watch it find the truth.</em></h1><p>It explores, acts, recovers from failures, collects evidence and verifies outcomes in a real browser.</p></div>
+        {investigation ? <section className="saved-heading"><div><Link href="/investigations">Back to My Investigations</Link><h1>{hostnameFor(investigation.url)}</h1><p>{new Date(investigation.createdAt).toLocaleString()} | {investigation.workflow} | {status}</p></div><button className="run-button" disabled={status === "running" || startingVerification || !result || planUsage?.remaining === 0} onClick={() => startRun(undefined, { workflow: "verify", goal: investigation.goal })}><RefreshCw /> Verify Fix</button></section> : <section className="mission-control">
+          <div className="mission-copy"><span className="eyebrow"><Sparkles size={13} /> AUTONOMOUS WEBSITE INTELLIGENCE</span><h1>Give the agent a website.<br /><em>Watch it find the truth.</em></h1><p>It explores, acts, recovers from failures, collects evidence and verifies outcomes in a real browser.</p>{planUsage && <div className="plan-usage" aria-label={`${planUsage.planName} plan usage`}><div><span>{planUsage.planName} plan</span><strong>{planUsage.remaining} investigations left</strong></div><div className="usage-track" aria-hidden="true"><span style={{ width: `${Math.min(100, (planUsage.used / planUsage.limit) * 100)}%` }} /></div><p>{planUsage.used} of {planUsage.limit} used this month · up to {planUsage.maxPages} pages each</p>{planUsage.remaining === 0 && <Link href="/#pricing">View upgrade options <ArrowRight size={13} /></Link>}</div>}</div>
           <form className="launcher" onSubmit={startRun}>
             <label htmlFor="target-url">Website to investigate</label>
             <div className="url-row"><Globe2 size={20} /><input id="target-url" value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://your-website.com" required disabled={status === "running"} /><span>PUBLIC WEB</span></div>
             <fieldset><legend>Choose an agent workflow</legend><div className="workflow-grid">{workflows.map((item) => <button type="button" key={item.id} className={`workflow-card ${workflow === item.id ? "selected" : ""}`} onClick={() => setWorkflow(item.id)} disabled={status === "running"}><span className="workflow-icon">{item.icon}</span><span><strong>{item.name}</strong><small>{item.description}</small></span><span className="radio-dot" /></button>)}</div></fieldset>
             {(workflow === "journey" || workflow === "verify") && <label className="goal-field" htmlFor="agent-goal"><span>{workflow === "verify" ? "Behavior to verify" : "Visitor goal"}</span><textarea id="agent-goal" value={goal} onChange={(event) => setGoal(event.target.value)} placeholder={workflow === "verify" ? "The pricing CTA should open signup" : "Find the cheapest plan without creating an account"} required /></label>}
-            <div className="launch-footer"><div className="limits"><span><MousePointer2 size={14} /> 10 actions</span><span><FileSearch size={14} /> 4 pages</span><span><LockKeyhole size={14} /> No submissions</span></div><button className="run-button" disabled={status === "running"}>{status === "running" ? <Loader2 className="spin" /> : <Play />} {status === "running" ? "Agent running…" : "Launch agent"}<ArrowRight /></button></div>
+            <div className="launch-footer"><div className="limits"><span><MousePointer2 size={14} /> 10 actions</span><span><FileSearch size={14} /> {planUsage?.maxPages || 4} pages</span><span><LockKeyhole size={14} /> No submissions</span></div><button className="run-button" disabled={status === "running" || planUsage?.remaining === 0}>{status === "running" ? <Loader2 className="spin" /> : <Play />} {status === "running" ? "Agent running…" : planUsage?.remaining === 0 ? "Monthly limit reached" : "Launch agent"}<ArrowRight /></button></div>
           </form>
         </section>}
         {error && <div className="agent-error" role="alert"><TriangleAlert /><div><strong>Run interrupted</strong><p>{error}</p></div></div>}
@@ -268,11 +284,27 @@ function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; 
   return <div className="metric"><span>{icon}</span><div><small>{label}</small><strong>{value}</strong></div></div>;
 }
 function FindingCard({ finding, onVerify, disabled }: { finding: Finding; disabled: boolean; onVerify: (finding: Finding) => void }) {
+  const cardRef = useRef<HTMLElement>(null);
+  const [isVisible, setIsVisible] = useState(false);
   const severity = finding.severity.toLowerCase();
   const severityLabel = severity.charAt(0).toUpperCase() + severity.slice(1);
   const severityClass = severity === "high" ? findingStyles.high : severity === "medium" ? findingStyles.medium : severity === "resolved" ? findingStyles.resolved : "";
+  useEffect(() => {
+    const card = cardRef.current;
+    if (!card || window.matchMedia("(prefers-reduced-motion: reduce)").matches || !("IntersectionObserver" in window)) {
+      setIsVisible(true);
+      return;
+    }
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      setIsVisible(true);
+      observer.disconnect();
+    }, { threshold: 0.16, rootMargin: "0px 0px -6% 0px" });
+    observer.observe(card);
+    return () => observer.disconnect();
+  }, []);
   return (
-    <article className={findingStyles.card}>
+    <article ref={cardRef} className={findingStyles.card} data-visible={isVisible}>
       <div className={findingStyles.header}>
         <div className={findingStyles.status}>
           <span className={`${findingStyles.severityPill} ${severityClass}`}><AlertTriangle aria-hidden="true" />{severityLabel} priority</span>
