@@ -1,4 +1,4 @@
-import { investigationDatabase } from "@/lib/investigation-runtime";
+import { investigationDatabase, investigationDocumentStore } from "@/lib/investigation-runtime";
 export type Investigation = {
   id: string; userId: string; url: string; workflow: string; goal: string;
   status: "running" | "completed" | "error"; createdAt: string; updatedAt: string;
@@ -20,8 +20,8 @@ async function sql(query: string, params: string[]) {
     if (!response.ok || !body.success) throw new Error("Investigation storage is unavailable.");
     return body.result[0].results;
   }
-  if (process.env.NODE_ENV === "production" && process.env.INVESTIGATIONS_REQUIRE_D1 === "true") {
-    throw new Error("Persistent investigation storage is not configured.");
+  if (process.env.NODE_ENV === "production" && process.env.INVESTIGATIONS_ALLOW_EPHEMERAL !== "true") {
+    throw new Error("Persistent investigation storage is not configured. Set MONGODB_URI or the Cloudflare D1 credentials.");
   }
   return null;
 }
@@ -37,6 +37,8 @@ const savedEventCounts = new WeakMap<Investigation, number>();
 export async function saveInvestigation(record: Investigation) {
   record.updatedAt = new Date().toISOString();
   record.findingCount = record.events.filter((event) => event.type === "finding").length;
+  const documents = investigationDocumentStore();
+  if (documents) { await documents.save(record); return; }
   const { events, ...metadata } = record;
   const rows = await sql("INSERT INTO investigations (id, user_id, created_at, updated_at, data) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET updated_at=excluded.updated_at, data=excluded.data WHERE investigations.user_id=excluded.user_id", [record.id, record.userId, record.createdAt, record.updatedAt, JSON.stringify(metadata)]);
   if (rows !== null) {
@@ -61,6 +63,8 @@ export async function saveInvestigation(record: Investigation) {
 }
 export async function getInvestigation(userId: string, id: string): Promise<Investigation | null> {
   if (!/^[a-f0-9-]{36}$/i.test(id)) return null;
+  const documents = investigationDocumentStore();
+  if (documents) return await documents.get(userId, id) as Investigation | null;
   const rows = await sql("SELECT data FROM investigations WHERE id=? AND user_id=?", [id, userId]);
   if (rows !== null) {
     if (!rows[0]) return null;
@@ -74,6 +78,8 @@ export async function getInvestigation(userId: string, id: string): Promise<Inve
   } catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return null; throw error; }
 }
 export async function listInvestigations(userId: string): Promise<Investigation[]> {
+  const documents = investigationDocumentStore();
+  if (documents) return await documents.list(userId) as Investigation[];
   const rows = await sql("SELECT data FROM investigations WHERE user_id=? ORDER BY created_at DESC", [userId]);
   if (rows !== null) return rows.map((row) => ({ ...JSON.parse(row.data), events: [] }));
   const { readdir } = await import("node:fs/promises");

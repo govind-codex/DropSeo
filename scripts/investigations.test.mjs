@@ -23,7 +23,7 @@ test("persistent history, ownership, and repeated verification", async (t) => {
   Object.assign(process.env, { NODE_ENV: "test", NEXT_RUNTIME: "nodejs", INVESTIGATIONS_DEV_DIR: directory });
   delete process.env.AGENT_WORKER_URL;
   delete process.env.INVESTIGATIONS_D1_TOKEN;
-  const store = await load("../lib/investigations.ts", { "@/lib/investigation-runtime": dataUrl("export function investigationDatabase() { return null; }") });
+  const store = await load("../lib/investigations.ts", { "@/lib/investigation-runtime": dataUrl("export function investigationDatabase() { return null; } export function investigationDocumentStore() { return null; }") });
   const comparison = await load("../lib/investigation-comparison.ts");
   const authUrl = dataUrl("export async function getSession() { return globalThis.__historyUser; } export function validMutationOrigin() { return globalThis.__historyOrigin !== false; }");
   const analyzerUrl = dataUrl(`export async function analyzeAuthenticatedWebsite(request) {
@@ -131,7 +131,7 @@ test("D1 SQL persists separate evidence events and filters every query by owner"
   globalThis.__historyD1 = { prepare(query) { return { bind(...params) { return { async all() { return { results: database.prepare(query).all(...params) }; } }; } }; } };
   const runtime = process.env.NEXT_RUNTIME;
   delete process.env.NEXT_RUNTIME;
-  const cloudflareUrl = dataUrl("export function investigationDatabase() { return globalThis.__historyD1; }");
+  const cloudflareUrl = dataUrl("export function investigationDatabase() { return globalThis.__historyD1; } export function investigationDocumentStore() { return null; }");
   const { module: store } = await load("../lib/investigations.ts", { "@/lib/investigation-runtime": cloudflareUrl });
   try {
     const record = { id: crypto.randomUUID(), userId: "alice", url: "https://example.com/", workflow: "autonomous", goal: "", status: "running", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), events: [{ type: "activity", title: "Started" }] };
@@ -153,5 +153,39 @@ test("D1 SQL persists separate evidence events and filters every query by owner"
     database.close(); delete globalThis.__historyD1;
     if (runtime === undefined) delete process.env.NEXT_RUNTIME; else process.env.NEXT_RUNTIME = runtime;
   }
+});
+
+test("production refuses ephemeral investigation storage by default", async () => {
+  const previousNodeEnv = process.env.NODE_ENV;
+  const previousOverride = process.env.INVESTIGATIONS_ALLOW_EPHEMERAL;
+  process.env.NODE_ENV = "production";
+  delete process.env.INVESTIGATIONS_ALLOW_EPHEMERAL;
+  const runtimeUrl = dataUrl("export function investigationDatabase() { return null; } export function investigationDocumentStore() { return null; }");
+  const { module: store } = await load("../lib/investigations.ts", { "@/lib/investigation-runtime": runtimeUrl });
+  try {
+    await assert.rejects(() => store.listInvestigations("alice"), /Persistent investigation storage is not configured/);
+  } finally {
+    if (previousNodeEnv === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = previousNodeEnv;
+    if (previousOverride === undefined) delete process.env.INVESTIGATIONS_ALLOW_EPHEMERAL; else process.env.INVESTIGATIONS_ALLOW_EPHEMERAL = previousOverride;
+  }
+});
+
+test("document storage persists and isolates MongoDB-style investigation records", async () => {
+  const records = new Map();
+  globalThis.__historyDocuments = {
+    async save(record) { records.set(record.id, structuredClone(record)); },
+    async get(userId, id) { const record = records.get(id); return record?.userId === userId ? structuredClone(record) : null; },
+    async list(userId) { return [...records.values()].filter((record) => record.userId === userId).map((record) => ({ ...structuredClone(record), events: [] })); },
+  };
+  const runtimeUrl = dataUrl("export function investigationDatabase() { return null; } export function investigationDocumentStore() { return globalThis.__historyDocuments; }");
+  const { module: store } = await load("../lib/investigations.ts", { "@/lib/investigation-runtime": runtimeUrl });
+  try {
+    const record = { id: crypto.randomUUID(), userId: "alice", url: "https://example.com/", workflow: "autonomous", goal: "", status: "running", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), events: [{ type: "finding", title: "Stored" }] };
+    await store.saveInvestigation(record);
+    assert.equal((await store.getInvestigation("alice", record.id)).events.length, 1);
+    assert.equal(await store.getInvestigation("bob", record.id), null);
+    assert.equal((await store.listInvestigations("alice")).length, 1);
+    assert.equal((await store.listInvestigations("bob")).length, 0);
+  } finally { delete globalThis.__historyDocuments; }
 });
 

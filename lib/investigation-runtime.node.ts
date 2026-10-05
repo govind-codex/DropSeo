@@ -1,2 +1,85 @@
-// Next.js uses the authenticated server-side D1 HTTP adapter in investigations.ts.
+import { MongoClient, type Db } from "mongodb";
+
+type StoredInvestigation = {
+  _id: string;
+  id: string;
+  userId: string;
+  createdAt: string;
+  [key: string]: unknown;
+};
+
+type StoredEvent = {
+  investigationId: string;
+  sequence: number;
+  data: Record<string, unknown>;
+};
+
+export type InvestigationDocumentStore = {
+  save(record: unknown): Promise<void>;
+  get(userId: string, id: string): Promise<unknown | null>;
+  list(userId: string): Promise<unknown[]>;
+};
+
+let databasePromise: Promise<Db> | null = null;
+let indexesPromise: Promise<void> | null = null;
+
+function mongoDatabase() {
+  const uri = process.env.MONGODB_URI;
+  if (!uri) return null;
+  if (!databasePromise) {
+    const client = new MongoClient(uri, { maxPoolSize: 5 });
+    databasePromise = client.connect().then((connected) => connected.db(process.env.MONGODB_DATABASE || "audifox"));
+  }
+  return databasePromise;
+}
+
+async function initializeDatabase(db: Db) {
+  if (!indexesPromise) indexesPromise = Promise.all([
+    db.collection<StoredInvestigation>("investigations").createIndex({ userId: 1, createdAt: -1 }),
+    db.collection<StoredEvent>("investigation_events").createIndex({ investigationId: 1, sequence: 1 }, { unique: true }),
+  ]).then(() => undefined).catch((error) => { indexesPromise = null; throw error; });
+  await indexesPromise;
+}
+
 export function investigationDatabase(): D1Database | null { return null; }
+
+export function investigationDocumentStore(): InvestigationDocumentStore | null {
+  const pendingDatabase = mongoDatabase();
+  if (!pendingDatabase) return null;
+  return {
+    async save(value) {
+      const record = value as Record<string, unknown> & { id: string; userId: string; createdAt: string; events: Record<string, unknown>[] };
+      const db = await pendingDatabase;
+      await initializeDatabase(db);
+      const { events, ...metadata } = record;
+      await db.collection<StoredInvestigation>("investigations").updateOne(
+        { _id: record.id, userId: record.userId },
+        { $set: metadata },
+        { upsert: true },
+      );
+      if (events.length) await db.collection<StoredEvent>("investigation_events").bulkWrite(events.map((data, sequence) => ({
+        updateOne: {
+          filter: { investigationId: record.id, sequence },
+          update: { $setOnInsert: { investigationId: record.id, sequence, data } },
+          upsert: true,
+        },
+      })), { ordered: false });
+    },
+    async get(userId, id) {
+      const db = await pendingDatabase;
+      await initializeDatabase(db);
+      const record = await db.collection<StoredInvestigation>("investigations").findOne({ _id: id, userId });
+      if (!record) return null;
+      const events = await db.collection<StoredEvent>("investigation_events").find({ investigationId: id }).sort({ sequence: 1 }).toArray();
+      const { _id, ...metadata } = record;
+      void _id;
+      return { ...metadata, events: events.map((event) => event.data) };
+    },
+    async list(userId) {
+      const db = await pendingDatabase;
+      await initializeDatabase(db);
+      const records = await db.collection<StoredInvestigation>("investigations").find({ userId }).sort({ createdAt: -1 }).toArray();
+      return records.map(({ _id, ...record }) => { void _id; return { ...record, events: [] }; });
+    },
+  };
+}
