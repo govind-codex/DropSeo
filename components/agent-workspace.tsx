@@ -11,7 +11,6 @@ import {
   ArrowRight,
   Bot,
   Check,
-  ChevronRight,
   CircleStop,
   Download,
   Eye,
@@ -19,7 +18,6 @@ import {
   FlaskConical,
   Gauge,
   Globe2,
-  History,
   Loader2,
   LockKeyhole,
   MousePointer2,
@@ -33,6 +31,8 @@ import {
   TriangleAlert,
   Zap,
 } from "lucide-react";
+import { UserProfileMenu } from "@/components/ui/user-profile-menu";
+import { exportInvestigationPdf } from "@/lib/report-pdf";
 type Workflow = "autonomous" | "journey" | "performance" | "verify";
 type ActivityItem = { id: string; at: string; status: "running" | "complete" | "warning" | "blocked"; title: string; detail: string };
 type Finding = { id: string; category: string; severity: string; title: string; expected: string; observed: string; recommendation: string; confidence: string; evidenceType: string; workflowId?: string };
@@ -83,6 +83,8 @@ export default function AgentWorkspace({ user, investigation }: { user: { name: 
   const [progress, setProgress] = useState(0);
   const [completionPending, setCompletionPending] = useState(false);
   const [startingVerification, setStartingVerification] = useState(false);
+  const [pdfExporting, setPdfExporting] = useState(false);
+  const [pdfError, setPdfError] = useState("");
   const [planUsage, setPlanUsage] = useState<PlanUsage | null>(null);
   const loadPlanUsage = useCallback(async () => {
     const response = await fetch("/api/usage", { cache: "no-store" });
@@ -232,22 +234,24 @@ export default function AgentWorkspace({ user, investigation }: { user: { name: 
     window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
     startRun(undefined, { workflow: "verify", goal: `${finding.title}. Expected behavior: ${finding.expected}`, workflowId: finding.workflowId, findingId: result?.comparison ? result.comparison.issues.find((issue) => issue.finding.title === finding.title && issue.status !== "Newly detected")?.finding.id : finding.id });
   }
-  function exportReport() {
-    if (!result) return;
-    const blob = new Blob([JSON.stringify({ ...result, profile }, null, 2)], { type: "application/json" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `audifox-agent-${result.runId.slice(0, 8)}.json`;
-    link.click();
-    URL.revokeObjectURL(link.href);
+  async function exportReport() {
+    if (!result || pdfExporting) return;
+    setPdfExporting(true);
+    setPdfError("");
+    try {
+      await exportInvestigationPdf({ result, profile, targetUrl: investigation?.url || url });
+    } catch {
+      setPdfError("PDF could not be created. Please try again.");
+    } finally {
+      setPdfExporting(false);
+    }
   }
   return (
     <div className="agent-app">
       <header className="topbar">
         <Link className="brand" href="/" aria-label="AudiFox home"><span className="brand-mark" aria-hidden="true"><img src="/audifox-logo.png" alt="" width="40" height="40" /></span>AudiFox<span>.</span></Link>
-        <Link className="product-name" href="/dashboard"><Bot size={15} /> Agent workspace</Link><Link className="history-nav" href="/investigations"><History size={15} /> My Investigations</Link>
         <div className="safe-badge"><ShieldCheck size={15} /> Safe mode enforced</div>
-        <div className="workspace-account"><span className="avatar" aria-hidden="true">{user.name.slice(0, 1).toUpperCase()}</span><span className="account-name" title={user.email}>{user.name}</span><form action="/api/auth/logout" method="post"><button className="signout-button" type="submit">Sign out</button></form></div>
+        <UserProfileMenu user={user} />
       </header>
       <main className="agent-main">
         {investigation ? <section className="saved-heading"><div><Link href="/investigations">Back to My Investigations</Link><h1>{hostnameFor(investigation.url)}</h1><p>{new Date(investigation.createdAt).toLocaleString()} | {investigation.workflow} | {status}</p></div><button className="run-button" disabled={status === "running" || startingVerification || !result || planUsage?.remaining === 0} onClick={() => startRun(undefined, { workflow: "verify", goal: investigation.goal })}><RefreshCw /> Verify Fix</button></section> : <section className="mission-control">
@@ -270,11 +274,10 @@ export default function AgentWorkspace({ user, investigation }: { user: { name: 
           </div>
         </section>
         {result?.comparison && <section className="verification-results"><div className="results-heading"><div><span className="eyebrow">VERIFICATION COMPARISON</span><h2>Changes since the original investigation</h2><Link href={`/investigations/${result.comparison.referenceId}`}>Open original investigation</Link></div></div><div className="comparison-grid">{["Fixed", "Still present", "Newly detected", "Unverified"].map((state) => <section key={state}><h3>{state} <span>{result.comparison!.issues.filter((issue) => issue.status === state).length}</span></h3>{result.comparison!.issues.filter((issue) => issue.status === state).map((issue) => <article key={issue.finding.id}><strong>{issue.finding.title}</strong><p>{issue.detail}</p></article>)}</section>)}</div></section>}
-        {(status === "completed" || findings.length > 0) && <section className="results"><div className="results-heading"><div><span className="eyebrow"><Search size={13} /> EVIDENCE-BACKED REPORT</span><h2>{result?.outcome || "Findings collected during the run"}</h2><p>{result ? `${result.visitedPages.length} pages · ${result.actions.length} evidence actions · ${(result.durationMs / 1000).toFixed(1)} seconds` : "Findings appear as they are verified."}</p></div>{result && <button className="export-button" onClick={exportReport}><Download /> Export evidence report</button>}</div>
+        {(status === "completed" || findings.length > 0) && <section className="results"><div className="results-heading"><div><span className="eyebrow"><Search size={13} /> EVIDENCE-BACKED REPORT</span><h2>{result?.outcome || "Findings collected during the run"}</h2><p>{result ? `${result.visitedPages.length} pages · ${result.actions.length} evidence actions · ${(result.durationMs / 1000).toFixed(1)} seconds` : "Findings appear as they are verified."}</p></div>{result && <div className="report-export"><button className="export-button" onClick={exportReport} disabled={pdfExporting}>{pdfExporting ? <Loader2 className="spin" /> : <Download />} {pdfExporting ? "Preparing PDF…" : "Take PDF"}</button>{pdfError && <span role="alert">{pdfError}</span>}</div>}</div>
           {result && <div className="metric-grid"><Metric icon={<Gauge />} label="LCP observed" value={result.performance.vitals.lcp ? `${(result.performance.vitals.lcp / 1000).toFixed(2)}s` : "—"} /><Metric icon={<Zap />} label="Response start" value={`${(result.performance.ttfb / 1000).toFixed(2)}s`} /><Metric icon={<FileSearch />} label="Resources" value={String(result.performance.resources)} /><Metric icon={<ShieldCheck />} label="Blocked actions" value={String(result.safety.blockedActions)} /></div>}
           <div className="findings-list">{findings.length ? findings.map((finding) => <FindingCard finding={finding} key={finding.id} disabled={status === "running" || startingVerification || !result} onVerify={verifyFinding} />) : <div className="no-findings"><Check /><strong>No material issues were verified in this bounded run.</strong></div>}</div>
         </section>}
-        {!investigation && <section className="history-section"><div className="results-heading"><div><span className="eyebrow"><History size={13} /> WEBSITE MEMORY</span><h2>Recent investigations</h2><p>Your investigations are saved automatically in your account.</p></div><Link className="export-button" href="/investigations">My Investigations <ChevronRight /></Link></div>{investigationId && <Link className="saved-run-link" href={`/investigations/${investigationId}`}>Open this saved investigation <ChevronRight /></Link>}</section>}
       </main>
       <footer className="agent-footer"><span><img className="agent-footer-logo" src="/audifox-logo.png" alt="" width="22" height="22" /> AudiFox Agent</span><p>Bounded autonomy · Evidence before claims · Consequential actions blocked</p></footer>
     </div>

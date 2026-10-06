@@ -2,6 +2,8 @@ import Link from "next/link";
 import { ArrowRight, Bot, Check, FileSearch, Gauge, Globe2, LockKeyhole, Route, ShieldCheck, Sparkles } from "lucide-react";
 import { GoogleSignIn } from "@/components/google-signin";
 import { Pricing, type PricingPlan } from "@/components/ui/pricing";
+import Navbar from "@/components/ui/navbar-02";
+import { UserProfileMenu } from "@/components/ui/user-profile-menu";
 import { getSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -46,11 +48,13 @@ export default async function LandingPage() {
   return (
     <div className="landing-page">
       <a className="skip-link" href="#main">Skip to content</a>
-      <header className="landing-nav">
-        <Link className="brand" href="/" aria-label="AudiFox home"><span className="brand-mark" aria-hidden="true"><img src="/audifox-logo.png" alt="" width="40" height="40" /></span>AudiFox<span>.</span></Link>
-        <nav aria-label="Main navigation"><a href="#how-it-works">How it works</a><a href="#capabilities">Capabilities</a><a href="#pricing">Pricing</a></nav>
-        <a className="nav-signin" href={user ? "/dashboard" : "/api/auth/google"} target={user ? undefined : "_top"}>{user ? "Workspace" : "Sign in"} <ArrowRight size={16} /></a>
-      </header>
+      {user ? (
+        <header className="landing-nav">
+          <Link className="brand" href="/" aria-label="AudiFox home"><span className="brand-mark" aria-hidden="true"><img src="/audifox-logo.png" alt="" width="40" height="40" /></span>AudiFox<span>.</span></Link>
+          <nav aria-label="Main navigation"><a href="#how-it-works">How it works</a><a href="#capabilities">Capabilities</a><a href="#pricing">Pricing</a></nav>
+          <UserProfileMenu user={user} />
+        </header>
+      ) : <Navbar />}
       <main id="main">
         <section className="landing-hero">
           <div className="hero-copy">
