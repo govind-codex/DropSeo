@@ -39,6 +39,7 @@ type DodoSubscriptionData = NonNullable<SubscriptionPayload["data"]>;
 
 const developmentEntitlements = new Map<string, StoredPlanEntitlement>();
 const developmentUsage = new Map<string, number>();
+const developmentSyncs = new Map<string, string>();
 
 function monthPeriod(now = new Date()) {
   return now.toISOString().slice(0, 7);
@@ -101,7 +102,7 @@ export async function getPlanUsage(userId: string): Promise<PlanUsage> {
 }
 
 export async function reserveInvestigation(userId: string, email: string) {
-  const usage = await getPlanUsage(userId);
+  const usage = await getPlanUsageForUser({ id: userId, email });
   const store = requireStore();
   const key = `${userId}:${usage.period}`;
   let used: number | null;
@@ -169,4 +170,48 @@ export async function reconcileDodoSubscription(user: { id: string; email: strin
   const data = await response.json() as DodoSubscriptionData;
   await persistDodoSubscription(data, new Date().toISOString(), user);
   return await getPlanUsage(user.id);
+}
+
+export async function getPlanUsageForUser(user: { id: string; email: string }) {
+  const current = await getPlanUsage(user.id);
+  if (current.plan !== "free") return current;
+  const store = requireStore();
+  const lastSync = store ? await store.getLastSync(user.id) : developmentSyncs.get(user.id) || null;
+  if (lastSync && Date.now() - new Date(lastSync).getTime() < 5 * 60_000) return current;
+  if (store) await store.setLastSync(user.id, user.email);
+  else developmentSyncs.set(user.id, new Date().toISOString());
+  try {
+    await reconcileDodoAccount(user);
+    return await getPlanUsage(user.id);
+  } catch (error) {
+    console.error("Dodo account reconciliation failed:", error instanceof Error ? error.message : String(error));
+    return current;
+  }
+}
+
+export async function reconcileDodoAccount(user: { id: string; email: string }) {
+  const bearerToken = process.env.DODO_PAYMENTS_API_KEY?.trim();
+  if (!bearerToken || bearerToken.startsWith("replace_with")) return 0;
+  const environment = process.env.DODO_PAYMENTS_ENVIRONMENT === "live_mode" ? "live" : "test";
+  const baseUrl = `https://${environment}.dodopayments.com`;
+  const headers = { Authorization: `Bearer ${bearerToken}`, Accept: "application/json" };
+  const customersResponse = await fetch(`${baseUrl}/customers?email=${encodeURIComponent(user.email)}&page_size=100`, { headers, cache: "no-store" });
+  if (!customersResponse.ok) throw new Error("Dodo Payments could not look up this customer account.");
+  const customersBody = await customersResponse.json() as { items?: Array<{ customer_id?: string; email?: string }> };
+  const customers = (customersBody.items || []).filter((customer) => customer.customer_id && customer.email?.toLowerCase() === user.email.toLowerCase());
+  let imported = 0;
+  for (const customer of customers) {
+    const subscriptionsResponse = await fetch(`${baseUrl}/subscriptions?customer_id=${encodeURIComponent(customer.customer_id!)}&status=active&page_size=100`, { headers, cache: "no-store" });
+    if (!subscriptionsResponse.ok) throw new Error("Dodo Payments could not load this customer's subscriptions.");
+    const subscriptionsBody = await subscriptionsResponse.json() as { items?: DodoSubscriptionData[] };
+    for (const subscription of subscriptionsBody.items || []) {
+      try {
+        await persistDodoSubscription(subscription, new Date().toISOString(), user);
+        imported += 1;
+      } catch (error) {
+        if (!(error instanceof Error) || !/missing the AudiFox user, plan, or subscription fields/.test(error.message)) throw error;
+      }
+    }
+  }
+  return imported;
 }

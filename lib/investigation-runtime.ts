@@ -14,6 +14,8 @@ export type PlanDocumentStore = {
   getUsage(userId: string, period: string): Promise<number>;
   reserveUsage(userId: string, email: string, period: string, limit: number): Promise<number | null>;
   releaseUsage(userId: string, period: string): Promise<void>;
+  getLastSync(userId: string): Promise<string | null>;
+  setLastSync(userId: string, email: string): Promise<void>;
 };
 export function investigationDatabase(): D1Database | null { return env.DB || null; }
 export function investigationDocumentStore(): InvestigationDocumentStore | null { return null; }

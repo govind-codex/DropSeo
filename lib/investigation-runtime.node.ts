@@ -43,6 +43,8 @@ export type PlanDocumentStore = {
   getUsage(userId: string, period: string): Promise<number>;
   reserveUsage(userId: string, email: string, period: string, limit: number): Promise<number | null>;
   releaseUsage(userId: string, period: string): Promise<void>;
+  getLastSync(userId: string): Promise<string | null>;
+  setLastSync(userId: string, email: string): Promise<void>;
 };
 
 export type InvestigationDocumentStore = {
@@ -155,6 +157,21 @@ export function planDocumentStore(): PlanDocumentStore | null {
       await db.collection<StoredPlanUsage>("plan_usage").updateOne(
         { _id: `${userId}:${period}`, count: { $gt: 0 } },
         { $inc: { count: -1 }, $set: { updatedAt: new Date().toISOString() } },
+      );
+    }); },
+    async getLastSync(userId) { return await withMongoErrors(async () => {
+      const db = await pendingDatabase;
+      await initializeDatabase(db);
+      const record = await db.collection<{ _id: string; syncedAt: string }>("plan_sync").findOne({ _id: userId });
+      return record?.syncedAt || null;
+    }); },
+    async setLastSync(userId, email) { return await withMongoErrors(async () => {
+      const db = await pendingDatabase;
+      await initializeDatabase(db);
+      await db.collection<{ _id: string; email: string; syncedAt: string }>("plan_sync").updateOne(
+        { _id: userId },
+        { $set: { email, syncedAt: new Date().toISOString() } },
+        { upsert: true },
       );
     }); },
   };

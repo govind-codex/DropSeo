@@ -92,4 +92,39 @@ test("checkout return reconciliation activates a verified test subscription", as
   }
 });
 
+test("relogin imports existing active purchases by verified customer email", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalKey = process.env.DODO_PAYMENTS_API_KEY;
+  const originalEnvironment = process.env.DODO_PAYMENTS_ENVIRONMENT;
+  const saved = [];
+  process.env.DODO_PAYMENTS_API_KEY = "test_key";
+  process.env.DODO_PAYMENTS_ENVIRONMENT = "test_mode";
+  globalThis.fetch = async (url) => {
+    const value = String(url);
+    if (value.includes("/customers?")) return Response.json({ items: [{ customer_id: "cus_123", email: "buyer@example.com" }] });
+    if (value.includes("/subscriptions?")) return Response.json({ items: [
+      { subscription_id: "sub_pro", product_id: "pdt_pro", status: "active", customer: { email: "buyer@example.com" }, metadata: { audifox_plan: "pro" } },
+      { subscription_id: "sub_studio", product_id: "pdt_studio", status: "active", customer: { email: "buyer@example.com" }, metadata: { audifox_plan: "studio" } },
+    ] });
+    throw new Error(`Unexpected Dodo URL: ${value}`);
+  };
+  globalThis.__planStore = {
+    async getEntitlements() { return saved; },
+    async setEntitlement(record) { saved.push(record); },
+    async getUsage() { return 0; },
+    async getLastSync() { return null; },
+    async setLastSync() {},
+  };
+  try {
+    const usage = await plans.getPlanUsageForUser({ id: "user_123", email: "buyer@example.com" });
+    assert.equal(usage.plan, "studio");
+    assert.equal(usage.limit, 200);
+    assert.equal(saved.length, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalKey === undefined) delete process.env.DODO_PAYMENTS_API_KEY; else process.env.DODO_PAYMENTS_API_KEY = originalKey;
+    if (originalEnvironment === undefined) delete process.env.DODO_PAYMENTS_ENVIRONMENT; else process.env.DODO_PAYMENTS_ENVIRONMENT = originalEnvironment;
+  }
+});
+
 test.after(() => { delete globalThis.__planStore; });
