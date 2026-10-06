@@ -25,6 +25,12 @@ export async function POST(request: NextRequest) {
 
   const config = dodoCheckoutConfig(plan);
   if (!config) return statusRedirect("configuration");
+  const returnUrl = new URL(config.returnUrl);
+  // Dodo appends the authoritative status and subscription_id after checkout.
+  // Remove stale placeholders to avoid duplicate query parameters.
+  returnUrl.searchParams.delete("status");
+  returnUrl.searchParams.delete("subscription_id");
+  const normalizedReturnUrl = returnUrl.toString();
 
   const checkoutRequest = new NextRequest(request.url, {
     method: "POST",
@@ -33,7 +39,7 @@ export async function POST(request: NextRequest) {
       product_cart: [{ product_id: config.productId, quantity: 1 }],
       customer: { email: user.email, name: user.name },
       metadata: { audifox_user_id: user.id, audifox_plan: plan },
-      return_url: config.returnUrl,
+      return_url: normalizedReturnUrl,
       cancel_url: `${authConfig().origin}/checkout?status=cancelled`,
       customization: { theme: "light", theme_config: { pay_button_text: `Subscribe to ${plan === "pro" ? "Pro" : "Studio"}` } },
       feature_flags: { allow_discount_code: true },
@@ -44,7 +50,7 @@ export async function POST(request: NextRequest) {
     const response = await Checkout({
       bearerToken: config.bearerToken,
       environment: config.environment,
-      returnUrl: config.returnUrl,
+      returnUrl: normalizedReturnUrl,
       type: "session",
     })(checkoutRequest);
 

@@ -35,6 +35,8 @@ type SubscriptionPayload = {
   };
 };
 
+type DodoSubscriptionData = NonNullable<SubscriptionPayload["data"]>;
+
 const developmentEntitlements = new Map<string, StoredPlanEntitlement>();
 const developmentUsage = new Map<string, number>();
 
@@ -123,14 +125,20 @@ export async function releaseInvestigation(userId: string, period: string) {
 export async function syncDodoSubscription(value: unknown) {
   const payload = value as SubscriptionPayload;
   if (!payload.type?.startsWith("subscription.") || payload.data?.payload_type !== "Subscription") return;
-  const data = payload.data;
+  const timestamp = payload.timestamp instanceof Date ? payload.timestamp.toISOString() : payload.timestamp || new Date().toISOString();
+  await persistDodoSubscription(payload.data, timestamp);
+}
+
+async function persistDodoSubscription(data: DodoSubscriptionData, timestamp: string, expectedUser?: { id: string; email: string }) {
   const metadataPlan = data.metadata?.audifox_plan;
   const plan = isPaidPlan(metadataPlan) ? metadataPlan : planFromProduct(data.product_id);
-  const userId = data.metadata?.audifox_user_id;
+  const metadataUserId = data.metadata?.audifox_user_id;
+  const customerEmail = data.customer?.email?.toLowerCase();
+  const userId = typeof metadataUserId === "string" && metadataUserId ? metadataUserId : expectedUser && customerEmail === expectedUser.email.toLowerCase() ? expectedUser.id : undefined;
   if (!plan || typeof userId !== "string" || !userId || !data.subscription_id || !data.product_id || !data.status) {
     throw new Error("Dodo subscription webhook is missing the AudiFox user, plan, or subscription fields.");
   }
-  const timestamp = payload.timestamp instanceof Date ? payload.timestamp.toISOString() : payload.timestamp || new Date().toISOString();
+  if (expectedUser && userId !== expectedUser.id) throw new Error("This subscription does not belong to the signed-in AudiFox account.");
   const record: StoredPlanEntitlement = {
     userId,
     email: data.customer?.email || "",
@@ -146,4 +154,19 @@ export async function syncDodoSubscription(value: unknown) {
   const store = requireStore();
   if (store) await store.setEntitlement(record);
   else developmentEntitlements.set(record.subscriptionId, record);
+}
+
+export async function reconcileDodoSubscription(user: { id: string; email: string }, subscriptionId: string) {
+  if (!/^sub_[A-Za-z0-9_-]+$/.test(subscriptionId)) throw new Error("The checkout returned an invalid subscription ID.");
+  const bearerToken = process.env.DODO_PAYMENTS_API_KEY?.trim();
+  if (!bearerToken || bearerToken.startsWith("replace_with")) throw new Error("Dodo Payments is not configured.");
+  const environment = process.env.DODO_PAYMENTS_ENVIRONMENT === "live_mode" ? "live" : "test";
+  const response = await fetch(`https://${environment}.dodopayments.com/subscriptions/${encodeURIComponent(subscriptionId)}`, {
+    headers: { Authorization: `Bearer ${bearerToken}`, Accept: "application/json" },
+    cache: "no-store",
+  });
+  if (!response.ok) throw new Error("Dodo Payments could not verify this subscription.");
+  const data = await response.json() as DodoSubscriptionData;
+  await persistDodoSubscription(data, new Date().toISOString(), user);
+  return await getPlanUsage(user.id);
 }

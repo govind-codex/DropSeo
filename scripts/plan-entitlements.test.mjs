@@ -59,4 +59,37 @@ test("verified Dodo subscription payloads persist the checkout user and plan", a
   assert.equal(saved.status, "active");
 });
 
+test("checkout return reconciliation activates a verified test subscription", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalKey = process.env.DODO_PAYMENTS_API_KEY;
+  const originalEnvironment = process.env.DODO_PAYMENTS_ENVIRONMENT;
+  let saved;
+  process.env.DODO_PAYMENTS_API_KEY = "test_key";
+  process.env.DODO_PAYMENTS_ENVIRONMENT = "test_mode";
+  globalThis.fetch = async (url) => {
+    assert.match(String(url), /^https:\/\/test\.dodopayments\.com\/subscriptions\/sub_/);
+    return Response.json({
+      subscription_id: "sub_checkout",
+      product_id: "pdt_pro",
+      status: "active",
+      customer: { email: "buyer@example.com" },
+      metadata: { audifox_user_id: "user_123", audifox_plan: "pro" },
+    });
+  };
+  globalThis.__planStore = {
+    async setEntitlement(record) { saved = record; },
+    async getEntitlements() { return saved ? [saved] : []; },
+    async getUsage() { return 0; },
+  };
+  try {
+    const usage = await plans.reconcileDodoSubscription({ id: "user_123", email: "buyer@example.com" }, "sub_checkout");
+    assert.equal(usage.plan, "pro");
+    assert.equal(usage.limit, 50);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalKey === undefined) delete process.env.DODO_PAYMENTS_API_KEY; else process.env.DODO_PAYMENTS_API_KEY = originalKey;
+    if (originalEnvironment === undefined) delete process.env.DODO_PAYMENTS_ENVIRONMENT; else process.env.DODO_PAYMENTS_ENVIRONMENT = originalEnvironment;
+  }
+});
+
 test.after(() => { delete globalThis.__planStore; });
