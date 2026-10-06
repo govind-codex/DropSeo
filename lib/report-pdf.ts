@@ -72,7 +72,7 @@ export async function exportInvestigationPdf({ result, profile, targetUrl }: Exp
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 48;
   const contentWidth = pageWidth - margin * 2;
-  const contentBottom = pageHeight - 54;
+  const contentBottom = pageHeight - 42;
   let y = margin;
 
   const addPage = () => {
@@ -203,7 +203,8 @@ export async function exportInvestigationPdf({ result, profile, targetUrl }: Exp
     doc.roundedRect(margin, cardTop, contentWidth, cardHeight, 9, 9, "FD");
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
-    doc.setTextColor(...(finding.severity.toLowerCase() === "high" ? colors.warning : colors.green));
+    const severityColor = finding.severity.toLowerCase() === "high" ? colors.warning : colors.green;
+    doc.setTextColor(severityColor[0], severityColor[1], severityColor[2]);
     doc.text(`${pdfSafe(finding.severity).toUpperCase()}  |  ${pdfSafe(finding.category).toUpperCase()}`, margin + 15, cardTop + 18);
     y = cardTop + 37;
     writeText(`${index + 1}. ${finding.title}`, margin + 15, contentWidth - 30, { size: 11, leading: 14, style: "bold" });
@@ -211,9 +212,11 @@ export async function exportInvestigationPdf({ result, profile, targetUrl }: Exp
     writeText(`Observed: ${finding.observed}`, margin + 15, contentWidth - 30, { size: 8.5, leading: 12, color: colors.muted });
     y += 3;
     writeText(`Recommended: ${finding.recommendation}`, margin + 15, contentWidth - 30, { size: 8.5, leading: 12, color: colors.ink });
-    y = cardTop + cardHeight + 10;
+    y = cardTop + cardHeight + (index === result.findings.length - 1 ? 0 : 10);
   });
 
+  const pagesPreviewHeight = 38 + Math.min(result.visitedPages.length, 6) * 15;
+  ensureSpace(pagesPreviewHeight);
   sectionTitle(`Pages reviewed (${result.visitedPages.length})`);
   result.visitedPages.forEach((page, index) => {
     ensureSpace(22);
@@ -221,25 +224,13 @@ export async function exportInvestigationPdf({ result, profile, targetUrl }: Exp
     y += 2;
   });
 
-  ensureSpace(55);
-  y += 12;
-  doc.setDrawColor(...colors.line);
-  doc.line(margin, y, pageWidth - margin, y);
-  y += 18;
-  writeText(
-    `Safety: ${result.safety.blockedActions} consequential actions blocked. This report contains evidence collected during a bounded automated investigation.`,
-    margin,
-    contentWidth,
-    { size: 8, leading: 12, color: colors.muted },
-  );
-
   const pageCount = doc.getNumberOfPages();
   for (let page = 1; page <= pageCount; page += 1) {
     doc.setPage(page);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.setTextColor(...colors.muted);
-    doc.text("AudiFox - Evidence before claims", margin, pageHeight - 24);
+    doc.text(`AudiFox - Evidence before claims - ${result.safety.blockedActions} actions blocked`, margin, pageHeight - 24);
     doc.text(`Page ${page} of ${pageCount}`, pageWidth - margin, pageHeight - 24, { align: "right" });
   }
 
