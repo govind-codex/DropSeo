@@ -251,7 +251,7 @@ export default function AgentWorkspace({ user, investigation }: { user: { name: 
       </header>
       <main className="agent-main">
         {investigation ? <section className="saved-heading"><div><Link href="/investigations">Back to My Investigations</Link><h1>{hostnameFor(investigation.url)}</h1><p>{new Date(investigation.createdAt).toLocaleString()} | {investigation.workflow} | {status}</p></div><button className="run-button" disabled={status === "running" || startingVerification || !result || planUsage?.remaining === 0} onClick={() => startRun(undefined, { workflow: "verify", goal: investigation.goal })}><RefreshCw /> Verify Fix</button></section> : <section className="mission-control">
-          <div className="mission-copy"><span className="eyebrow"><Sparkles size={13} /> AUTONOMOUS WEBSITE INTELLIGENCE</span><h1>Give the agent a website.<br /><em>Watch it find the truth.</em></h1><p>It explores, acts, recovers from failures, collects evidence and verifies outcomes in a real browser.</p>{planUsage && <div className="plan-usage" aria-label={`${planUsage.planName} plan usage`}><div><span>{planUsage.planName} plan</span><strong>{planUsage.remaining} investigations left</strong></div><div className="usage-track" aria-hidden="true"><span style={{ width: `${Math.min(100, (planUsage.used / planUsage.limit) * 100)}%` }} /></div><p>{planUsage.used} of {planUsage.limit} used this month · up to {planUsage.maxPages} pages each</p>{planUsage.remaining === 0 && <Link href="/#pricing">View upgrade options <ArrowRight size={13} /></Link>}</div>}</div>
+          <div className="mission-copy"><span className="eyebrow"><Sparkles size={13} /> AUTONOMOUS WEBSITE INTELLIGENCE</span><h1>Give the agent a website.<br /><em>Watch it find the truth.</em></h1><p>It explores, acts, recovers from failures, collects evidence and verifies outcomes in a real browser.</p>{planUsage && <PlanUsageCard usage={planUsage} />}</div>
           <form className="launcher" onSubmit={startRun}>
             <label htmlFor="target-url">Website to investigate</label>
             <div className="url-row"><Globe2 size={20} /><input id="target-url" value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://your-website.com" required disabled={status === "running"} /><span>PUBLIC WEB</span></div>
@@ -282,6 +282,18 @@ export default function AgentWorkspace({ user, investigation }: { user: { name: 
 }
 function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return <div className="metric"><span>{icon}</span><div><small>{label}</small><strong>{value}</strong></div></div>;
+}
+function PlanUsageCard({ usage }: { usage: PlanUsage }) {
+  const usedPercent = usage.limit ? Math.min(100, Math.round((usage.used / usage.limit) * 100)) : 0;
+  const action = usage.plan === "free" ? "Explore paid plans" : usage.plan === "pro" ? "Upgrade to Studio" : "Highest access enabled";
+  return (
+    <section className="plan-usage" data-plan={usage.plan} aria-label={`${usage.planName} plan usage`}>
+      <div className="plan-usage-heading"><div><span>{usage.planName} plan</span><small>{usage.plan === "free" ? "Starter access" : usage.plan === "pro" ? "Professional access" : "Team access"}</small></div><strong>{usage.remaining} investigation{usage.remaining === 1 ? "" : "s"} left</strong></div>
+      <div className="usage-track" role="progressbar" aria-label="Monthly investigations used" aria-valuemin={0} aria-valuemax={usage.limit} aria-valuenow={usage.used}><span style={{ width: `${usedPercent}%` }} /></div>
+      <p><b>{usage.used} of {usage.limit}</b> used this month <i /> up to <b>{usage.maxPages} pages</b> each</p>
+      {usage.plan === "studio" ? <span className="plan-current"><Check size={13} /> {action}</span> : <Link href="/#pricing">{action} <ArrowRight size={13} /></Link>}
+    </section>
+  );
 }
 function FindingCard({ finding, onVerify, disabled }: { finding: Finding; disabled: boolean; onVerify: (finding: Finding) => void }) {
   const cardRef = useRef<HTMLElement>(null);
