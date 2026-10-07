@@ -5,7 +5,10 @@ import { dodoCheckoutConfig, isDodoCheckoutUrl, isDodoPlan } from "@/lib/dodo";
 
 export const runtime = "nodejs";
 
-function statusRedirect(status: string) {
+function checkoutFailure(request: NextRequest, status: string, httpStatus = 400) {
+  if (request.headers.get("accept")?.includes("application/json")) {
+    return NextResponse.json({ error: status }, { status: httpStatus });
+  }
   return NextResponse.redirect(`${authConfig().origin}/checkout?status=${encodeURIComponent(status)}`, 303);
 }
 
@@ -13,18 +16,23 @@ export async function POST(request: NextRequest) {
   if (!validMutationOrigin(request)) return new NextResponse("Invalid request origin.", { status: 403 });
 
   const user = await getSession();
-  if (!user) return NextResponse.redirect(`${authConfig().origin}/api/auth/google`, 303);
+  if (!user) {
+    if (request.headers.get("accept")?.includes("application/json")) {
+      return NextResponse.json({ error: "authentication" }, { status: 401 });
+    }
+    return NextResponse.redirect(`${authConfig().origin}/api/auth/google`, 303);
+  }
 
   let plan: FormDataEntryValue | null;
   try {
     plan = (await request.formData()).get("plan");
   } catch {
-    return statusRedirect("invalid-plan");
+    return checkoutFailure(request, "invalid-plan");
   }
-  if (!isDodoPlan(plan)) return statusRedirect("invalid-plan");
+  if (!isDodoPlan(plan)) return checkoutFailure(request, "invalid-plan");
 
   const config = dodoCheckoutConfig(plan);
-  if (!config) return statusRedirect("configuration");
+  if (!config) return checkoutFailure(request, "configuration", 503);
   const returnUrl = new URL(config.returnUrl);
   // Dodo appends the authoritative status and subscription_id after checkout.
   // Remove stale placeholders to avoid duplicate query parameters.
@@ -54,11 +62,14 @@ export async function POST(request: NextRequest) {
       type: "session",
     })(checkoutRequest);
 
-    if (!response.ok) return statusRedirect("error");
+    if (!response.ok) return checkoutFailure(request, "error", 502);
     const data = (await response.json()) as { checkout_url?: unknown };
-    if (!isDodoCheckoutUrl(data.checkout_url)) return statusRedirect("error");
+    if (!isDodoCheckoutUrl(data.checkout_url)) return checkoutFailure(request, "error", 502);
+    if (request.headers.get("accept")?.includes("application/json")) {
+      return NextResponse.json({ checkoutUrl: data.checkout_url }, { headers: { "Cache-Control": "no-store" } });
+    }
     return NextResponse.redirect(data.checkout_url, 303);
   } catch {
-    return statusRedirect("error");
+    return checkoutFailure(request, "error", 502);
   }
 }

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, Bot, Check, FileSearch, Gauge, Globe2, LockKeyhole, Route, ShieldCheck, Sparkles } from "lucide-react";
 import { GoogleSignIn } from "@/components/google-signin";
+import { LandingReveal } from "@/components/landing-reveal";
 import { Pricing, type PricingPlan } from "@/components/ui/pricing";
 import Navbar from "@/components/ui/navbar-02";
 import { UserProfileMenu } from "@/components/ui/user-profile-menu";
@@ -57,14 +58,14 @@ export default async function LandingPage() {
       ) : <Navbar />}
       <main id="main">
         <section className="landing-hero">
-          <div className="hero-copy">
+          <LandingReveal className="hero-copy" onLoad>
             <span className="landing-eyebrow"><Sparkles size={15} /> YOUR WEBSITE, UNDER INVESTIGATION</span>
             <h1>Find the friction.<br /><span>Fix what matters.</span></h1>
             <p>Meet the website agent that explores real visitor journeys, finds problems, and brings back the evidence to help you fix them.</p>
             {user ? <Link className="google-button" href="/dashboard">Go to your workspace <ArrowRight size={18} /></Link> : <GoogleSignIn />}
             <span className="signin-note"><LockKeyhole size={13} /> Sign in securely. Go straight to your workspace.</span>
             <div className="hero-benefits"><span><Check size={16} /> Evidence-backed findings</span><span><Check size={16} /> Safe, bounded exploration</span></div>
-          </div>
+          </LandingReveal>
           <div className="product-preview" aria-label="Illustrative preview of an AudiFox investigation">
             <div className="preview-toolbar"><span><Bot size={17} /> Agent workspace</span><span className="preview-label">PRODUCT PREVIEW</span></div>
             <div className="preview-address"><Globe2 size={17} /><span>your-website.com</span><span className="preview-scope">PUBLIC WEB</span></div>
@@ -75,12 +76,12 @@ export default async function LandingPage() {
           </div>
         </section>
         <section className="landing-capabilities" id="capabilities" aria-labelledby="capabilities-heading">
-          <div className="section-intro"><span className="landing-eyebrow">LESS GUESSWORK. MORE CLARITY.</span><h2 id="capabilities-heading">One agent. Four ways to get answers.</h2><p>Choose the investigation your website needs.</p></div>
+          <LandingReveal className="section-intro"><span className="landing-eyebrow">LESS GUESSWORK. MORE CLARITY.</span><h2 id="capabilities-heading">One agent. Four ways to get answers.</h2><p>Choose the investigation your website needs.</p></LandingReveal>
           <div className="capability-grid">
-            <article><span className="capability-icon"><Bot /></span><h3>Investigate your site</h3><p>Let the agent map your site and explore the paths that matter most.</p></article>
-            <article><span className="capability-icon"><Route /></span><h3>Test a visitor’s goal</h3><p>See whether someone can complete a task, and where the journey breaks.</p></article>
-            <article><span className="capability-icon"><Gauge /></span><h3>Uncover slowdowns</h3><p>Measure page performance and investigate likely causes of friction.</p></article>
-            <article><span className="capability-icon"><ShieldCheck /></span><h3>Verify your fixes</h3><p>Revisit a reported problem and check that the behavior has improved.</p></article>
+            <LandingReveal delay={0}><article><span className="capability-icon"><Bot /></span><h3>Investigate your site</h3><p>Let the agent map your site and explore the paths that matter most.</p></article></LandingReveal>
+            <LandingReveal delay={0.06}><article><span className="capability-icon"><Route /></span><h3>Test a visitor’s goal</h3><p>See whether someone can complete a task, and where the journey breaks.</p></article></LandingReveal>
+            <LandingReveal delay={0.12}><article><span className="capability-icon"><Gauge /></span><h3>Uncover slowdowns</h3><p>Measure page performance and investigate likely causes of friction.</p></article></LandingReveal>
+            <LandingReveal delay={0.18}><article><span className="capability-icon"><ShieldCheck /></span><h3>Verify your fixes</h3><p>Revisit a reported problem and check that the behavior has improved.</p></article></LandingReveal>
           </div>
         </section>
         <Pricing
@@ -89,7 +90,7 @@ export default async function LandingPage() {
           title="Start small. Investigate deeper when you need to."
           description="Every plan keeps AudiFox in safe mode and brings back evidence you can act on."
         />
-        <section className="landing-how" id="how-it-works" aria-labelledby="how-heading"><div><span className="landing-eyebrow">FROM URL TO INSIGHT</span><h2 id="how-heading">Your next investigation<br />is three steps away.</h2><a href={user ? "/dashboard" : "/api/auth/google"} className="text-cta" target={user ? undefined : "_top"}>Open your workspace <ArrowRight size={18} /></a></div><ol><li><span>1</span><div><h3>Sign in with Google</h3><p>Securely enter your AudiFox workspace.</p></div></li><li><span>2</span><div><h3>Give the agent a website</h3><p>Paste a public URL and choose a workflow.</p></div></li><li><span>3</span><div><h3>Turn findings into fixes</h3><p>Follow the investigation and review the evidence.</p></div></li></ol></section>
+        <section className="landing-how" id="how-it-works" aria-labelledby="how-heading"><LandingReveal><span className="landing-eyebrow">FROM URL TO INSIGHT</span><h2 id="how-heading">Your next investigation<br />is three steps away.</h2><a href={user ? "/dashboard" : "/api/auth/google"} className="text-cta" target={user ? undefined : "_top"}>Open your workspace <ArrowRight size={18} /></a></LandingReveal><LandingReveal delay={0.1}><ol><li><span>1</span><div><h3>Sign in with Google</h3><p>Securely enter your AudiFox workspace.</p></div></li><li><span>2</span><div><h3>Give the agent a website</h3><p>Paste a public URL and choose a workflow.</p></div></li><li><span>3</span><div><h3>Turn findings into fixes</h3><p>Follow the investigation and review the evidence.</p></div></li></ol></LandingReveal></section>
       </main>
       <footer className="landing-footer"><Link className="brand" href="/"><span className="brand-mark" aria-hidden="true"><img src="/audifox-logo.png" alt="" width="32" height="32" /></span>AudiFox<span>.</span></Link><p>Evidence before claims. Safety before actions.</p><span>© {new Date().getFullYear()} AudiFox</span></footer>
     </div>

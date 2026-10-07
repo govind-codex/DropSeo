@@ -85,6 +85,7 @@ test("checkout return reconciliation activates a verified test subscription", as
     const usage = await plans.reconcileDodoSubscription({ id: "user_123", email: "buyer@example.com" }, "sub_checkout");
     assert.equal(usage.plan, "pro");
     assert.equal(usage.limit, 50);
+    assert.equal(usage.subscriptionStatus, "active");
   } finally {
     globalThis.fetch = originalFetch;
     if (originalKey === undefined) delete process.env.DODO_PAYMENTS_API_KEY; else process.env.DODO_PAYMENTS_API_KEY = originalKey;

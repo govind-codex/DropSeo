@@ -6,6 +6,7 @@ import { Check, Star } from "lucide-react"
 import Link from "next/link"
 
 import { buttonVariants } from "@/components/ui/button"
+import { CheckoutForm } from "@/components/ui/checkout-form"
 import { useMediaQuery } from "@/hooks/use-media-query"
 import { cn } from "@/lib/utils"
 
@@ -120,19 +121,7 @@ export function Pricing({
                     {plan.id === "free" || authenticated ? plan.buttonText : `Sign in to choose ${plan.name}`}
                   </Link>
                 ) : (
-                  <form action="/api/payments/checkout" method="post" className="mt-auto">
-                    <input type="hidden" name="plan" value={plan.id} />
-                    <button
-                      type="submit"
-                      className={cn(
-                        buttonVariants({ variant: plan.isPopular ? "default" : "outline", size: "lg" }),
-                        "h-12 w-full rounded-lg text-base font-bold transition-transform hover:-translate-y-0.5",
-                        plan.isPopular && "bg-[#087c68] text-white hover:bg-[#076b5a]"
-                      )}
-                    >
-                      {plan.buttonText}
-                    </button>
-                  </form>
+                  <CheckoutForm plan={plan.id} label={plan.buttonText} featured={plan.isPopular} />
                 )}
               </div>
             </motion.article>

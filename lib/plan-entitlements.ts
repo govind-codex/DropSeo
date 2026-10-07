@@ -165,11 +165,12 @@ export async function reconcileDodoSubscription(user: { id: string; email: strin
   const response = await fetch(`https://${environment}.dodopayments.com/subscriptions/${encodeURIComponent(subscriptionId)}`, {
     headers: { Authorization: `Bearer ${bearerToken}`, Accept: "application/json" },
     cache: "no-store",
+    signal: AbortSignal.timeout(8_000),
   });
   if (!response.ok) throw new Error("Dodo Payments could not verify this subscription.");
   const data = await response.json() as DodoSubscriptionData;
   await persistDodoSubscription(data, new Date().toISOString(), user);
-  return await getPlanUsage(user.id);
+  return { ...await getPlanUsage(user.id), subscriptionStatus: data.status };
 }
 
 export async function getPlanUsageForUser(user: { id: string; email: string }) {

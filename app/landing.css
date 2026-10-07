@@ -50,3 +50,60 @@
 .preview-bottom{padding:10px 16px;font-size:11px}
 .preview-bottom span{font-size:11px}
 @media(max-width:1000px){.product-preview{justify-self:center}}
+
+/* Landing motion: short entrance cues and responsive interaction feedback. */
+.landing-page .capability-grid article{height:100%;transition:transform .25s ease,border-color .25s ease,background-color .25s ease}
+.landing-page .capability-grid article:hover{transform:translateY(-5px);border-color:#80bda9;background:#ffffff80}
+.landing-page .capability-icon{transition:transform .25s ease,background-color .25s ease}
+.landing-page .capability-grid article:hover .capability-icon{transform:translateY(-2px) rotate(-3deg);background:#d3eee2}
+.landing-page .preview-steps>div{transition:background-color .2s ease,padding-left .2s ease}
+.landing-page .preview-steps>div:hover{background:#ffffff80;padding-left:5px}
+.landing-page .preview-steps>div>svg{transition:transform .22s ease}
+.landing-page .preview-steps>div:hover>svg{transform:scale(1.12)}
+.landing-page .landing-how li{transition:transform .24s ease,border-color .24s ease}
+.landing-page .landing-how li:hover{transform:translateX(5px);border-color:#b8dacc}
+.landing-page .text-cta svg,.landing-page .google-button>svg:last-child{transition:transform .22s ease}
+.landing-page .text-cta:hover svg,.landing-page .google-button:hover>svg:last-child{transform:translateX(4px)}
+.landing-page .landing-nav nav a{transition:color .2s ease}
+@media(prefers-reduced-motion:reduce){.landing-page .capability-grid article,.landing-page .capability-icon,.landing-page .preview-steps>div,.landing-page .preview-steps>div>svg,.landing-page .landing-how li,.landing-page .text-cta svg,.landing-page .google-button>svg:last-child,.landing-page .landing-nav nav a{transition:none}.landing-page .capability-grid article:hover,.landing-page .capability-grid article:hover .capability-icon,.landing-page .preview-steps>div:hover>svg,.landing-page .landing-how li:hover,.landing-page .text-cta:hover svg,.landing-page .google-button:hover>svg:last-child{transform:none}}
+
+/* Checkout handoff and return states. */
+.checkout-progress{display:flex;align-items:center;justify-content:center;gap:7px;margin-top:11px;color:#456e60;font-size:12px;line-height:1.4;text-align:center}
+.checkout-progress svg{flex-shrink:0}
+.checkout-progress svg:last-child{opacity:.6}
+.checkout-form-error{margin:10px 0 0;color:#a93638;font-size:12px;line-height:1.45}
+.payment-page{position:relative;overflow:hidden;background:radial-gradient(circle at 15% 10%,#d8f1e6 0,transparent 32%),radial-gradient(circle at 85% 82%,#e4f4ee 0,transparent 32%),#f7faf8}
+.payment-card{position:relative;width:min(100%,550px);padding:34px;border:1px solid #cfe2d8;border-radius:22px;background:#fff;box-shadow:0 28px 80px #163e3024;animation:payment-card-in .42s cubic-bezier(.22,1,.36,1) both}
+.payment-card:before{content:"";position:absolute;inset:0 0 auto;height:5px;border-radius:22px 22px 0 0;background:var(--brand-gradient)}
+.payment-card-top{display:flex;align-items:center;justify-content:space-between;gap:15px;margin-bottom:32px}
+.payment-card-top .brand{font-size:23px}
+.payment-secure{display:inline-flex;align-items:center;gap:5px;color:#58756a;font-size:11px;font-weight:650;white-space:nowrap}
+.payment-card .payment-icon{width:56px;height:56px;margin-bottom:20px;border-radius:16px;background:#e7f6ef;color:#087c68}
+.payment-card[data-tone=error] .payment-icon{background:#fff0ed;color:#bd4a48}
+.payment-card[data-tone=neutral] .payment-icon{background:#edf2f1;color:#58716b}
+.payment-card[data-tone=pending] .payment-icon{background:#fff5e6;color:#a36b1b}
+.payment-card .payment-eyebrow{margin-bottom:8px;color:#0a7b65}
+.payment-card[data-tone=error] .payment-eyebrow{color:#b74742}
+.payment-card[data-tone=pending] .payment-eyebrow{color:#946422}
+.payment-card[data-tone=neutral] .payment-eyebrow{color:#617b70}
+.payment-card h1{margin-bottom:12px}
+.payment-card>p:not(.payment-help){color:#61756c}
+.payment-notice{display:flex;align-items:flex-start;gap:12px;margin-top:25px;padding:15px;border:1px solid #d6e9df;border-radius:12px;background:#f1faf5;color:#16775e}
+.payment-card[data-tone=pending] .payment-notice{border-color:#f0e0c4;background:#fffbf3;color:#966725}
+.payment-notice>svg{flex-shrink:0;margin-top:2px}
+.payment-notice>div{display:grid;gap:4px}
+.payment-notice strong{font-size:13px}
+.payment-notice span:not(.payment-notice-pulse){color:#61756c;font-size:12px;line-height:1.5}
+.payment-notice-pulse{width:10px;height:10px;flex-shrink:0;margin:5px 4px 0;border-radius:50%;background:#d5a04b;box-shadow:0 0 0 5px #d5a04b26;animation:payment-pulse 1.8s ease-in-out infinite}
+.payment-card .payment-actions{display:grid;gap:10px;margin-top:27px}
+.payment-card .payment-actions .google-button{min-height:52px;gap:9px}
+.payment-card .payment-actions .back-link{display:inline-flex;justify-content:center;align-items:center;min-height:36px}
+.payment-card .payment-help{margin:16px 0 0;padding-top:15px;border-top:1px solid #e6eeea;color:#82958a;font-size:11px;line-height:1.5;text-align:center}
+.payment-card-loading .payment-secure{display:flex;justify-content:flex-end;margin-bottom:30px}
+.payment-loading-track{height:5px;margin-top:24px;overflow:hidden;border-radius:999px;background:#e1ede6}
+.payment-loading-track span{display:block;width:36%;height:100%;border-radius:inherit;background:#0a9277;animation:payment-track 1.4s ease-in-out infinite alternate}
+@keyframes payment-card-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes payment-track{to{transform:translateX(180%)}}
+@keyframes payment-pulse{50%{box-shadow:0 0 0 9px #d5a04b10}}
+@media(max-width:540px){.payment-card{padding:24px;border-radius:18px}.payment-card-top{margin-bottom:28px}.payment-card-top .brand{font-size:21px}.payment-secure{font-size:10px}}
+@media(prefers-reduced-motion:reduce){.payment-card,.payment-loading-track span,.payment-notice-pulse{animation:none}}
