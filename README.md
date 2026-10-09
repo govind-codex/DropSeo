@@ -1,33 +1,43 @@
-Under Construction
+<div align="center">
+  <img src="public/audifox-logo.png" alt="AudiFox logo" width="88" />
 
-## Investigation history
+  # AudiFox
 
-Investigations and all streamed evidence are saved on the server. Sites uses the
-`DB` D1 binding declared in `.openai/hosting.json`; apply the SQL migrations in
-`drizzle/` before starting a local Workers preview. Hosted Sites applies these
-packaged migrations during deployment.
+  <a href="https://git.io/typing-svg">
+    <img src="https://readme-typing-svg.demolab.com?font=Inter&amp;weight=600&amp;size=22&amp;duration=2600&amp;pause=900&amp;color=F97316&amp;center=true&amp;vCenter=true&amp;width=620&amp;lines=Give+the+agent+a+website.;Watch+it+find+the+truth.;Fix+what+actually+matters." alt="AudiFox animated introduction" />
+  </a>
 
-For Next.js deployments (including Vercel), attach a MongoDB database and expose
-its server-side connection string as `MONGODB_URI`. `MONGODB_DATABASE` optionally
-selects the database name and defaults to `dropseo`. The `investigations` and
-`investigation_events` collections and their indexes are created automatically
-on the first database request. Use Atlas's SRV connection string, create a
-database user, and permit the Vercel deployment in Atlas Network Access. The
-MongoDB Atlas Vercel integration can configure `MONGODB_URI` automatically.
+  **Autonomous website investigations with evidence-backed findings.**
 
-Cloudflare D1 remains supported through `CLOUDFLARE_ACCOUNT_ID`,
-`INVESTIGATIONS_D1_ID`, and `INVESTIGATIONS_D1_TOKEN`. The token needs D1
-read/write permission; keep it server-side and apply the `drizzle/*.sql`
-migrations. Production fails closed if durable storage is missing, preventing
-temporary serverless disk from being presented as saved history. Local development
-uses `.data/investigations` (gitignored), or `INVESTIGATIONS_DEV_DIR` for an
-explicit local directory.
+  ![Next.js](https://img.shields.io/badge/Next.js-16-111111?style=flat-square&logo=nextdotjs)
+  ![React](https://img.shields.io/badge/React-19-149ECA?style=flat-square&logo=react&logoColor=white)
+  ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white)
+  ![Playwright](https://img.shields.io/badge/Playwright-browser_agent-2EAD33?style=flat-square&logo=playwright&logoColor=white)
+</div>
 
-The browser worker requires `AGENT_WORKER_TOKEN` on both the web app and worker.
-Workflow and run memory are isolated by authenticated owner. Old browser-only
-summaries cannot be migrated safely: they contain neither ownership nor complete
-evidence. All new investigations are saved, including ongoing and interrupted
-runs. Verification creates a new history entry and retains the original report.
-Positive matching pass evidence is required for Fixed; incomplete evidence is
-Unverified. Closing a tab does not cancel server-side event persistence, subject
-to the hosting platform's execution timeout.
+## What it does
+
+- Explores real website journeys in a browser
+- Finds UX, SEO, and performance issues
+- Captures evidence and recommends practical fixes
+- Re-runs investigations to verify improvements
+
+## Run locally
+
+```bash
+npm install
+cp .env.example .env.local
+npm run dev
+```
+
+Open [localhost:3000](http://localhost:3000).
+
+## Commands
+
+```bash
+npm test          # Run tests
+npm run lint      # Check code quality
+npm run build     # Create a production build
+```
+
+> Requires Node.js 22.17 or newer. Configure the values documented in `.env.example` before running an investigation.
