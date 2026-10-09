@@ -59,21 +59,26 @@ export default async function LandingPage() {
       <main id="main">
         <section className="landing-hero">
           <LandingReveal className="hero-copy" onLoad>
-            <span className="landing-eyebrow"><Sparkles size={15} /> YOUR WEBSITE, UNDER INVESTIGATION</span>
-            <h1>Find the friction.<br /><span>Fix what matters.</span></h1>
-            <p>Meet the website agent that explores real visitor journeys, finds problems, and brings back the evidence to help you fix them.</p>
-            {user ? <Link className="google-button" href="/dashboard">Go to your workspace <ArrowRight size={18} /></Link> : <GoogleSignIn />}
-            <span className="signin-note"><LockKeyhole size={13} /> Sign in securely. Go straight to your workspace.</span>
-            <div className="hero-benefits"><span><Check size={16} /> Evidence-backed findings</span><span><Check size={16} /> Safe, bounded exploration</span></div>
+            <span className="landing-eyebrow"><Sparkles size={15} /> AI WEBSITE INVESTIGATOR</span>
+            <h1><span className="hero-title-line">Website friction, handled.</span><span className="hero-title-line">Save hours every week.</span></h1>
+            <p>AudiFox explores real visitor journeys, finds what gets in the way, and brings back clear evidence so you know exactly what to fix.</p>
+            <div className="hero-actions">
+              {user ? <Link className="google-button" href="/dashboard">Open your workspace <ArrowRight size={18} /></Link> : <GoogleSignIn />}
+              <span className="signin-note"><LockKeyhole size={13} /> Secure sign-in. No card required.</span>
+            </div>
+            <div className="hero-benefits" aria-label="AudiFox benefits"><span><Check size={15} /> Evidence-backed</span><span><Check size={15} /> Safe by default</span><span><Check size={15} /> Built for any public site</span></div>
           </LandingReveal>
-          <div className="product-preview" aria-label="Illustrative preview of an AudiFox investigation">
-            <div className="preview-toolbar"><span><Bot size={17} /> Agent workspace</span><span className="preview-label">PRODUCT PREVIEW</span></div>
+          <LandingReveal className="product-stage" delay={0.12} onLoad>
+            <div className="stage-trust"><span><ShieldCheck size={15} /> Safe browsing</span><span>Read-only exploration</span><span>Evidence captured</span></div>
+            <div className="product-preview" aria-label="Illustrative preview of an AudiFox investigation">
+            <div className="preview-toolbar"><span><Bot size={17} /> Agent workspace</span><span className="preview-label">LIVE INVESTIGATION</span></div>
             <div className="preview-address"><Globe2 size={17} /><span>your-website.com</span><span className="preview-scope">PUBLIC WEB</span></div>
             <div className="preview-mission"><span className="preview-agent"><Bot size={26} /></span><div><small>INVESTIGATION PLAN</small><h2>A better journey starts here.</h2></div></div>
             <div className="preview-steps"><div><span>01</span><div><strong>Explore the important paths</strong><p>Understand the site and the visitor’s goal.</p></div><Check size={18} /></div><div><span>02</span><div><strong>Investigate the friction</strong><p>Check journeys, SEO, and page performance.</p></div><Check size={18} /></div><div><span>03</span><div><strong>Bring back the evidence</strong><p>Clear findings. Practical next steps.</p></div><FileSearch size={18} /></div></div>
             <div className="preview-evidence"><FileSearch size={20} /><div><strong>From “something feels off” to a verified finding.</strong><p>Expected behavior → observed behavior → recommended fix</p></div></div>
             <div className="preview-bottom"><ShieldCheck size={15} /> Safe mode enforced <span>No purchases. No form submissions.</span></div>
-          </div>
+            </div>
+          </LandingReveal>
         </section>
         <section className="landing-capabilities" id="capabilities" aria-labelledby="capabilities-heading">
           <LandingReveal className="section-intro"><span className="landing-eyebrow">LESS GUESSWORK. MORE CLARITY.</span><h2 id="capabilities-heading">One agent. Four ways to get answers.</h2><p>Choose the investigation your website needs.</p></LandingReveal>
