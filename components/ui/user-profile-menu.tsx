@@ -107,7 +107,7 @@ export function UserProfileMenu({ user, className }: UserProfileMenuProps) {
               </span>
             </motion.div>
 
-            <nav className="mt-2 grid gap-1" aria-label="Account navigation">
+            <div className="mt-2 flex flex-col gap-1" role="group" aria-label="Account navigation">
               {menuItems.map((item, index) => {
                 const Icon = item.icon;
                 return (
@@ -130,7 +130,7 @@ export function UserProfileMenu({ user, className }: UserProfileMenuProps) {
                   </motion.div>
                 );
               })}
-            </nav>
+            </div>
 
             <motion.form
               className="mt-2 border-t border-[#e4ece9] pt-2"
