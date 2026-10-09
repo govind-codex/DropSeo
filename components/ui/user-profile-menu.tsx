@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { ChevronDown, ChevronRight, CreditCard, History, Home, Loader2, LogOut } from "lucide-react";
+import { ChevronDown, ChevronRight, CreditCard, History, Home, LayoutDashboard, Loader2, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type UserProfileMenuProps = {
@@ -13,6 +13,7 @@ type UserProfileMenuProps = {
 
 const menuItems = [
   { label: "Home", href: "/", icon: Home, accent: "bg-[#e3f5ee] text-[#087c68]" },
+  { label: "Workspace", href: "/dashboard", icon: LayoutDashboard, accent: "bg-[#e7f5ff] text-[#1676a3]" },
   { label: "My Investigations", href: "/investigations", icon: History, accent: "bg-[#e9efff] text-[#4b63c7]" },
   { label: "Billing", href: "/checkout", icon: CreditCard, accent: "bg-[#fff2dc] text-[#a46513]" },
 ];
