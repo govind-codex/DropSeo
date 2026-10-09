@@ -4,40 +4,58 @@
   # AudiFox
 
   <a href="https://git.io/typing-svg">
-    <img src="https://readme-typing-svg.demolab.com?font=Inter&amp;weight=600&amp;size=22&amp;duration=2600&amp;pause=900&amp;color=F97316&amp;center=true&amp;vCenter=true&amp;width=620&amp;lines=Give+the+agent+a+website.;Watch+it+find+the+truth.;Fix+what+actually+matters." alt="AudiFox animated introduction" />
+    <img src="https://readme-typing-svg.demolab.com?font=Inter&amp;weight=600&amp;size=22&amp;duration=2600&amp;pause=900&amp;color=087C68&amp;center=true&amp;vCenter=true&amp;width=620&amp;lines=Website+friction%2C+handled.;Evidence+before+claims.;Safety+before+actions." alt="AudiFox animated introduction" />
   </a>
 
-  **Autonomous website investigations with evidence-backed findings.**
+  **An AI website investigator that explores real visitor journeys and shows you exactly what to fix.**
 
   ![Next.js](https://img.shields.io/badge/Next.js-16-111111?style=flat-square&logo=nextdotjs)
   ![React](https://img.shields.io/badge/React-19-149ECA?style=flat-square&logo=react&logoColor=white)
   ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white)
-  ![Playwright](https://img.shields.io/badge/Playwright-browser_agent-2EAD33?style=flat-square&logo=playwright&logoColor=white)
+  ![Playwright](https://img.shields.io/badge/Playwright-Browser_Agent-2EAD33?style=flat-square&logo=playwright&logoColor=white)
 </div>
 
-## What it does
+## What AudiFox does
 
-- Explores real website journeys in a browser
-- Finds UX, SEO, and performance issues
-- Captures evidence and recommends practical fixes
-- Re-runs investigations to verify improvements
+| Workflow | Purpose |
+| --- | --- |
+| **Investigate** | Maps the site and tests its most important paths |
+| **Complete a goal** | Attempts a visitor task and finds where the journey breaks |
+| **Performance detective** | Measures the page and investigates likely slowdowns |
+| **Verify a fix** | Replays an issue and compares the new behavior with the original run |
+
+## How it works
+
+```text
+Public URL -> Investigation plan -> Safe browser actions -> Live evidence -> Findings -> Verify or export PDF
+```
+
+1. Sign in with Google, enter a public website, and choose a workflow.
+2. The agent profiles the site, creates a plan, and explores same-domain pages in read-only mode.
+3. Progress, screenshots, actions, and verified findings stream into the workspace live.
+4. Each finding explains the expected behavior, observed behavior, evidence, severity, and recommended fix.
+5. Runs are saved to investigation history. Fixes can be checked again and reports downloaded as PDF.
+
+> AudiFox blocks purchases, form submissions, sensitive fields, and other consequential actions.
 
 ## Run locally
 
 ```bash
 npm install
-cp .env.example .env.local
 npm run dev
 ```
 
-Open [localhost:3000](http://localhost:3000).
+Copy `.env.example` to `.env.local`, add your credentials, then open [localhost:3000](http://localhost:3000).
 
-## Commands
+Required services: **Gemini** and **Google OAuth**. Production history uses **MongoDB or Cloudflare D1**; payments and a separate browser worker are optional.
+
+## Useful commands
 
 ```bash
-npm test          # Run tests
-npm run lint      # Check code quality
-npm run build     # Create a production build
+npm run dev       # Web app + browser worker
+npm test          # Test agent workflows
+npm run lint      # Check the codebase
+npm run build     # Production build
 ```
 
-> Requires Node.js 22.17 or newer. Configure the values documented in `.env.example` before running an investigation.
+Built with Next.js, React, Gemini, Playwright, WebCMD, MongoDB/D1, and Dodo Payments. Requires Node.js 22.17+.
