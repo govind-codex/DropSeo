@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowRight, Bot, Check, FileSearch, Gauge, Globe2, Route, ShieldCheck, Sparkles } from "lucide-react";
 import { HalftoneHeadline } from "@/components/ui/halftone-headline";
 import { InvestigationStart } from "@/components/investigation-start";
-import { TrustLinks } from "@/components/trust-links";
+import { LandscapeFooter } from "@/components/landscape-footer";
 import { LandingReveal } from "@/components/landing-reveal";
 import { Pricing, type PricingPlan } from "@/components/ui/pricing";
 import Navbar from "@/components/ui/navbar-02";
@@ -99,7 +99,7 @@ export default async function LandingPage() {
         <p className="pricing-rules">Allowances reset on the first of each month at 00:00 UTC. Each accepted investigation or verification, including queued runs, uses one allowance. Failures after acceptance still count. Requests rejected before acceptance release their reservation. Unused allowances do not roll over. Studio currently provides higher individual limits; shared seats and queue priority are not offered.</p>
         <section className="landing-how" id="how-it-works" aria-labelledby="how-heading"><LandingReveal><span className="landing-eyebrow">FROM URL TO INSIGHT</span><h2 id="how-heading">Your next investigation<br />is three steps away.</h2><a href={user ? "/dashboard" : "/api/auth/google"} className="text-cta" target={user ? undefined : "_top"}>Open your workspace <ArrowRight size={18} /></a></LandingReveal><LandingReveal delay={0.1}><ol><li><span>1</span><div><h3>Enter your website and goal</h3><p>Choose what you want to learn.</p></div></li><li><span>2</span><div><h3>Sign in and investigate</h3><p>Your website and goal continue into your workspace.</p></div></li><li><span>3</span><div><h3>Turn findings into fixes</h3><p>Follow the investigation and review the evidence.</p></div></li></ol></LandingReveal></section>
       </main>
-      <footer className="landing-footer"><Link className="brand" href="/"><span className="brand-mark" aria-hidden="true"><img src="/audifox-logo.png" alt="" width="32" height="32" /></span>AudiFox<span>.</span></Link><p>Evidence before claims. Safety before actions.</p><TrustLinks /><span>© {new Date().getFullYear()} AudiFox</span></footer>
+      <LandscapeFooter />
     </div>
   );
 }
