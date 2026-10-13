@@ -1,8 +1,8 @@
 import { investigationDatabase, investigationDocumentStore } from "@/lib/investigation-runtime";
 export type Investigation = {
   id: string; userId: string; url: string; workflow: string; goal: string;
-  status: "running" | "completed" | "error"; createdAt: string; updatedAt: string;
-  referenceId?: string; findingCount?: number; events: Record<string, unknown>[]; result?: Record<string, unknown>; error?: string;
+  status: "queued" | "running" | "completed" | "failed" | "error"; createdAt: string; updatedAt: string;
+  referenceId?: string; findingId?: string; findingCount?: number; events: Record<string, unknown>[]; result?: Record<string, unknown>; error?: string;
 };
 
 // Hosted Sites use their native D1 binding. Next deployments can use the same
@@ -64,30 +64,43 @@ export async function saveInvestigation(record: Investigation) {
 export async function getInvestigation(userId: string, id: string): Promise<Investigation | null> {
   if (!/^[a-f0-9-]{36}$/i.test(id)) return null;
   const documents = investigationDocumentStore();
-  if (documents) return await documents.get(userId, id) as Investigation | null;
+  if (documents) return recoverInterrupted(await documents.get(userId, id) as Investigation | null);
   const rows = await sql("SELECT data FROM investigations WHERE id=? AND user_id=?", [id, userId]);
   if (rows !== null) {
     if (!rows[0]) return null;
     const events = await sql("SELECT e.data FROM investigation_events e JOIN investigations i ON i.id=e.investigation_id WHERE i.id=? AND i.user_id=? ORDER BY e.sequence", [id, userId]);
-    return { ...JSON.parse(rows[0].data), events: (events || []).map((row) => JSON.parse(row.data)) };
+    return recoverInterrupted({ ...JSON.parse(rows[0].data), events: (events || []).map((row) => JSON.parse(row.data)) });
   }
   const { readFile } = await import("node:fs/promises");
   try {
     const record = JSON.parse(await readFile(`${await localDirectory()}/${id}.json`, "utf8")) as Investigation;
-    return record.userId === userId ? record : null;
+    return record.userId === userId ? recoverInterrupted(record) : null;
   } catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return null; throw error; }
 }
 export async function listInvestigations(userId: string): Promise<Investigation[]> {
   const documents = investigationDocumentStore();
-  if (documents) return await documents.list(userId) as Investigation[];
+  if (documents) return recoverSummaries(userId, await documents.list(userId) as Investigation[]);
   const rows = await sql("SELECT data FROM investigations WHERE user_id=? ORDER BY created_at DESC", [userId]);
-  if (rows !== null) return rows.map((row) => ({ ...JSON.parse(row.data), events: [] }));
+  if (rows !== null) return recoverSummaries(userId, rows.map((row) => ({ ...JSON.parse(row.data), events: [] })));
   const { readdir } = await import("node:fs/promises");
   const names = await readdir(await localDirectory());
   const records = await Promise.all(names.filter((name) => name.endsWith(".json")).map((name) => getInvestigation(userId, name.slice(0, -5))));
   return records.filter((record): record is Investigation => Boolean(record)).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
+async function recoverSummaries(userId: string, records: Investigation[]) {
+  return Promise.all(records.map(async (record) => ["queued", "running"].includes(record.status) && Date.now() - Date.parse(record.updatedAt) > 360_000 ? await getInvestigation(userId, record.id) || record : record));
+}
+async function recoverInterrupted(record: Investigation | null) {
+  if (record && ["queued", "running"].includes(record.status) && Date.now() - Date.parse(record.updatedAt) > 360_000) {
+    record.status = "failed";
+    record.error = "This investigation stopped receiving events and exceeded its execution window. Start a new investigation to retry; the evidence collected so far is preserved.";
+    record.events.push({ type: "error", error: record.error, at: new Date().toISOString() });
+    await saveInvestigation(record);
+  }
+  return record;
+}
 export function investigationSummary(record: Investigation) {
-  return { id: record.id, url: record.url, workflow: record.workflow, status: record.status, createdAt: record.createdAt,
-    referenceId: record.referenceId, outcome: record.result?.outcome || record.error || "Investigation in progress", findings: Array.isArray(record.result?.findings) ? record.result.findings.length : record.findingCount ?? record.events.filter((event) => event.type === "finding").length };
+  const attentionFindings = Array.isArray(record.result?.findings) ? (record.result.findings as Array<{ id: string; title: string; severity: string; confidence?: string }>).filter((finding) => finding.severity !== "resolved" && finding.confidence === "verified").map(({ id, title, severity }) => ({ id, title, severity })) : [];
+  return { id: record.id, url: record.url, workflow: record.workflow, status: record.status === "error" ? "failed" : record.status, createdAt: record.createdAt,
+    referenceId: record.referenceId, outcome: record.result?.outcome || record.error || "Investigation in progress", attention: attentionFindings.length, attentionFindings, findings: Array.isArray(record.result?.findings) ? record.result.findings.length : record.findingCount ?? record.events.filter((event) => event.type === "finding").length };
 }

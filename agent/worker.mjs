@@ -435,7 +435,7 @@ async function screenshotEvent(page, runId, label) {
   await fs.mkdir(directory, { recursive: true });
   const filename = `${String(Date.now())}-${label}.jpg`;
   await fs.writeFile(path.join(directory, filename), buffer);
-  return { type: "snapshot", label, url: page.url(), image: `data:image/jpeg;base64,${buffer.toString("base64")}` };
+  return { type: "snapshot", id: randomUUID(), label, url: page.url(), image: `data:image/jpeg;base64,${buffer.toString("base64")}` };
 }
 
 async function webcmdScreenshotEvent(base64, runId, label, url) {
@@ -445,7 +445,7 @@ async function webcmdScreenshotEvent(base64, runId, label, url) {
   const directory = runOutputDirectory(runId);
   await fs.mkdir(directory, { recursive: true });
   await fs.writeFile(path.join(directory, `${String(Date.now())}-${label}.jpg`), buffer);
-  return { type: "snapshot", label, source: "webcmd", url: url || "", image: `data:image/jpeg;base64,${base64}` };
+  return { type: "snapshot", id: randomUUID(), label, source: "webcmd", url: url || "", image: `data:image/jpeg;base64,${base64}` };
 }
 
 export async function runAgent(input, res) {
@@ -477,6 +477,7 @@ async function runOwnedAgent(input, res) {
   const page = await context.newPage();
   const networkFailures = [];
   const consoleErrors = [];
+  const consoleEvidence = [];
   const history = [];
   const visited = new Set();
   const startedAt = Date.now();
@@ -489,8 +490,8 @@ async function runOwnedAgent(input, res) {
 
   page.on("dialog", (dialog) => dialog.dismiss().catch(() => {}));
   page.on("download", (download) => download.cancel().catch(() => {}));
-  page.on("console", (message) => { if (message.type() === "error") consoleErrors.push(message.text().slice(0, 300)); });
-  page.on("response", (response) => { if (response.status() >= 400) networkFailures.push({ status: response.status(), url: response.url().slice(0, 300) }); });
+  page.on("console", (message) => { if (message.type() === "error") { const detail = message.text().slice(0, 300); consoleErrors.push(detail); consoleEvidence.push({ url: page.url(), detail, capturedAt: new Date().toISOString() }); } });
+  page.on("response", (response) => { if (response.status() >= 400) networkFailures.push({ status: response.status(), url: response.url().slice(0, 300), pageUrl: response.request().isNavigationRequest() ? response.url() : page.url(), at: new Date().toISOString() }); });
   await context.route("**/*", async (route) => {
     const request = route.request();
     if (request.isNavigationRequest() && request.frame() === page.mainFrame() && !allowedNavigation(request.url(), target.origin)) return route.abort("blockedbyclient");
@@ -637,14 +638,30 @@ async function runOwnedAgent(input, res) {
     findings.sort((a, b) => (priorities.get(a.id)?.rank ?? 999) - (priorities.get(b.id)?.rank ?? 999));
     if (["autonomous", "performance"].includes(workflow) || finalOutcome === "The agent completed its bounded investigation.") finalOutcome = diagnosis.summary;
     emit(res, { type: "activity", status: "complete", title: "Analysis prioritized", detail: diagnosis.summary });
+    let finalScreenshot = null;
     if (!webcmdExecution?.passed && !pageSessionEnded && !page.isClosed()) {
-      try { emit(res, await screenshotEvent(page, runId, "final")); }
+      try { finalScreenshot = await screenshotEvent(page, runId, "final"); emit(res, finalScreenshot); }
       catch (error) { if (!browserSessionClosed(error, page)) throw error; }
     }
     if (learnedWorkflow) findings.forEach((finding) => { finding.workflowId = learnedWorkflow.id; });
-    findings.forEach((finding) => emit(res, { type: "finding", finding }));
+    findings.forEach((finding) => {
+      // DOM measurements refer to the last observed page. Action hypotheses retain
+      // their action URL instead of borrowing a screenshot from another page.
+      const action = history.find((step) => finding.evidenceType === "browser-action" && step.message === finding.observed);
+      finding.affectedUrls = [action?.url || observation.url];
+      finding.evidence = [{ url: action?.url || observation.url, detail: finding.observed, capturedAt: new Date().toISOString(), ...(finding.evidenceType === "dom" && finalScreenshot?.url === observation.url ? { snapshotId: finalScreenshot.id } : {}) }];
+      if (finding.title === "Network requests failed during the journey") {
+        finding.evidence = networkFailures.map((failure) => ({ url: /^https?:/.test(failure.pageUrl) ? failure.pageUrl : target.href, detail: `HTTP ${failure.status} for ${failure.url}`, capturedAt: failure.at }));
+        finding.affectedUrls = [...new Set(finding.evidence.map((item) => item.url))];
+      }
+      if (finding.title === "Browser console errors were observed") {
+        finding.evidence = consoleEvidence.map((item) => ({ ...item, url: /^https?:/.test(item.url) ? item.url : target.href }));
+        finding.affectedUrls = [...new Set(finding.evidence.map((item) => item.url))];
+      }
+      emit(res, { type: "finding", finding });
+    });
     const checkedFindings = baseFindings(observation, performance, networkFailures, consoleErrors);
-    const checkNames = ["Page title is missing", "Meta description is missing", "Meta description length is suboptimal", "Page title length is suboptimal", "Canonical URL is missing", "Page is excluded from search indexing", "Main heading structure is unclear", "Document language is missing", "Interactive controls have no accessible name", "Images are missing alt attributes", "Form controls lack accessible labels", "Largest content appears late", "Layout shifts exceed the recommended threshold", "Server response is slow", "Page transfer size is heavy", "An image is substantially oversized", "High script count may delay interaction", "Network requests failed during the journey", "Browser console errors were observed"];
+    const checkNames = ["Page title is missing", "Meta description is missing", "Meta description length is suboptimal", "Page title length is suboptimal", "Canonical URL is missing", "Page is excluded from search indexing", "Main heading structure is unclear", "Document language is missing", "Interactive controls have no accessible name", "Images are missing alt attributes", "Form controls lack accessible labels", "Largest content appears late", "Layout shifts exceed the recommended threshold", "Server response is slow", "Page transfer size is heavy", "An image is substantially oversized", "High script count may delay interaction"];
     const checkEvidence = pageSessionEnded ? [] : [{ url: observation.url, checks: checkNames.filter((name) => !["Largest content appears late", "Layout shifts exceed the recommended threshold"].includes(name) || performance.vitals.lcp > 0).map((name) => ({ name, pass: !checkedFindings.some((finding) => finding.title === name) })) }];
     const result = { savedWorkflow: learnedWorkflow || knownWorkflow || undefined, checkEvidence, runId, workflow, goal, status: "completed", completedAt: new Date().toISOString(), profile, outcome: finalOutcome, diagnosis, visitedPages: [...visited], actions: history, goalEvaluation: workflow === "journey" ? goalEvaluation : undefined, verification: verification || undefined, performance, auditSnapshot: { titlePresent: Boolean(observation.title), metaDescriptionPresent: Boolean(observation.description), canonicalPresent: Boolean(observation.canonical), h1Count: observation.headings.filter((item) => item.level === "H1").length }, regressions: { workflow: regressionDetected, metrics: metricRegressions.map((item) => ({ metric: item.metric, previous: item.previous, current: item.current })) }, findings, browserIntelligence: { webcmd: webcmdInfo, mode: webcmdExecution?.passed ? "reused" : webcmdExploration ? "explored" : "playwright-fallback", workflow: learnedWorkflow ? { id: learnedWorkflow.id, name: learnedWorkflow.name, status: learnedWorkflow.status, successRate: learnedWorkflow.successRate, steps: learnedWorkflow.steps.length } : null, regressionDetected: regressionDetected || metricRegressions.length > 0, partialEvidence: pageSessionEnded }, safety: { blockedActions: history.filter((item) => item.blocked).length, domainRestricted: true, sensitiveFieldsProtected: true, consequentialActionsProhibited: true }, durationMs: Date.now() - startedAt };
     await fs.mkdir(runOutputDirectory(), { recursive: true });

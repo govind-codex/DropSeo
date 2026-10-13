@@ -29,10 +29,13 @@ test("persistent history, ownership, and repeated verification", async (t) => {
   const analyzerUrl = dataUrl(`export async function analyzeAuthenticatedWebsite(request) {
     const { url } = await request.json();
     await new Promise(resolve => setTimeout(resolve, 10));
+    if (globalThis.__historyFailure) return Response.json({ error: "The website returned HTTP 503. Try another public page." }, { status: 503 });
     return Response.json({ url, title: "Test website", score: 80, checks: globalThis.__historyChecks, ttfb: 30, load: 50, images: 1, scripts: 1, styles: 1, links: [] });
   }`);
   const entitlementUrl = dataUrl(`export async function reserveInvestigation() { return globalThis.__planAllowance || { allowed: true, usage: { plan: "free", planName: "Free", status: "free", used: 1, limit: 3, remaining: 2, maxPages: 4, period: "2026-10", resetsAt: "2026-11-01T00:00:00.000Z" } }; } export async function releaseInvestigation() {}`);
-  const replacements = { "@/lib/auth": authUrl, "@/lib/investigations": store.url, "@/lib/investigation-comparison": comparison.url, "@/lib/website-analysis": analyzerUrl, "@/lib/plan-entitlements": entitlementUrl };
+  const intent = await load("../lib/investigation-intent.ts");
+  const presentation = await load("../lib/finding-presentation.ts");
+  const replacements = { "next/server": dataUrl("export function after(task) { task(); }"), "@/lib/investigation-intent": intent.url, "@/lib/finding-presentation": presentation.url, "@/lib/auth": authUrl, "@/lib/investigations": store.url, "@/lib/investigation-comparison": comparison.url, "@/lib/website-analysis": analyzerUrl, "@/lib/plan-entitlements": entitlementUrl };
   const detail = (await load("../app/api/investigations/[id]/route.ts", replacements)).module;
   const list = (await load("../app/api/investigations/route.ts", replacements)).module;
   const run = (await load("../app/api/agent/run/route.ts", replacements)).module;
@@ -60,13 +63,16 @@ test("persistent history, ownership, and repeated verification", async (t) => {
       const response = await post({ url: "https://example.com/", workflow: "autonomous" });
       assert.equal(response.status, 200);
       const id = response.headers.get("X-Investigation-ID");
-      assert.equal((await store.module.getInvestigation("alice", id)).status, "running");
+      assert.ok(["queued", "running"].includes((await store.module.getInvestigation("alice", id)).status));
       const events = (await response.text()).trim().split("\n").map(JSON.parse);
       original = await store.module.getInvestigation("alice", id);
       assert.equal(original.status, "completed", original.error);
       assert.deepEqual(original.events, events.slice(1));
       assert.deepEqual(original.result, events.at(-1).result);
-      assert.ok(original.events.some((event) => event.type === "snapshot"));
+      assert.ok(!original.events.some((event) => event.type === "snapshot"));
+      assert.equal(original.result.findings[0].affectedUrls[0], "https://example.com/");
+      assert.equal(original.result.findings[0].evidence[0].detail, "Measured evidence");
+      assert.equal(original.result.findings[0].verificationSupported, true);
       assert.ok(original.events.some((event) => event.type === "profile"));
     });
     await t.test("other users cannot list, read, or verify an ID", async () => {
@@ -105,11 +111,97 @@ test("persistent history, ownership, and repeated verification", async (t) => {
       let saved;
       for (let attempt = 0; attempt < 100; attempt++) {
         saved = await store.module.getInvestigation("alice", id);
-        if (saved.status !== "running") break;
+        if (!["queued", "running"].includes(saved.status)) break;
         await new Promise((resolve) => setTimeout(resolve, 10));
       }
       assert.equal(saved.status, "completed", saved.error);
       assert.ok(saved.result.findings.length);
+    });
+    await t.test("invalid URLs and unsupported targeted verification create no run", async () => {
+      const count = (await store.module.listInvestigations("alice")).length;
+      for (const url of ["example.com", "ftp://example.com", "https://user:password@example.com", "http://127.0.0.1", "https://example.com:8888"]) assert.equal((await post({ url })).status, 400);
+      const hypothesis = { ...structuredClone(original), id: crypto.randomUUID(), result: { findings: [{ id: "theory", title: "AI theory", confidence: "hypothesis" }], checkEvidence: [] } };
+      await store.module.saveInvestigation(hypothesis);
+      assert.equal((await post({ workflow: "verify", investigationId: hypothesis.id, findingId: "theory" })).status, 422);
+      assert.equal((await store.module.listInvestigations("alice")).length, count + 1);
+    });
+    await t.test("targeted verification records its date, source and finding without altering original evidence", async () => {
+      globalThis.__historyChecks = [check("Title", true), check("Language", false)];
+      const target = original.result.findings.find((finding) => finding.title === "Title");
+      const response = await post({ workflow: "verify", investigationId: original.id, findingId: target.id });
+      await response.text();
+      const saved = await store.module.getInvestigation("alice", response.headers.get("X-Investigation-ID"));
+      assert.equal(saved.findingId, target.id);
+      assert.equal(saved.referenceId, original.id);
+      assert.ok(Date.parse(saved.result.verifiedAt));
+      assert.equal(saved.result.comparison.issues.find((issue) => issue.finding.id === target.id).status, "Fixed");
+      assert.deepEqual((await store.module.getInvestigation("alice", original.id)).events, original.events);
+    });
+    await t.test("verification rejects a different engine before consuming an allowance", async () => {
+      const browserReport = { ...structuredClone(original), id: crypto.randomUUID(), result: { ...original.result, browserIntelligence: { mode: "playwright-fallback" } } };
+      await store.module.saveInvestigation(browserReport);
+      const response = await post({ workflow: "verify", investigationId: browserReport.id, findingId: original.result.findings[0].id });
+      assert.equal(response.status, 422);
+      assert.match((await response.json()).error, /original investigation engine/);
+    });
+    await t.test("failures persist an understandable error and retry creates a separate result", async () => {
+      globalThis.__historyFailure = true;
+      const response = await post({ url: "https://example.com/" });
+      await response.text();
+      const failed = await store.module.getInvestigation("alice", response.headers.get("X-Investigation-ID"));
+      assert.equal(failed.status, "failed");
+      assert.match(failed.error, /HTTP 503/);
+      globalThis.__historyFailure = false;
+      const retry = await post({ url: failed.url, workflow: failed.workflow, goal: failed.goal });
+      await retry.text();
+      assert.notEqual(retry.headers.get("X-Investigation-ID"), failed.id);
+      assert.equal((await store.module.getInvestigation("alice", failed.id)).status, "failed");
+    });
+    await t.test("abandoned runs recover after their execution window and preserve events", async () => {
+      const id = crypto.randomUUID();
+      const abandoned = { ...structuredClone(original), id, status: "running", result: undefined };
+      // Write an old record directly to simulate a terminated server process.
+      const { writeFile } = await import("node:fs/promises");
+      abandoned.updatedAt = new Date(Date.now() - 400_000).toISOString();
+      await writeFile(join(directory, `${id}.json`), JSON.stringify(abandoned));
+      const recovered = await store.module.getInvestigation("alice", id);
+      assert.equal(recovered.status, "failed");
+      assert.match(recovered.error, /execution window/);
+      assert.deepEqual(recovered.events.slice(0, -1), original.events);
+    });
+    await t.test("worker queue and running events persist genuine lifecycle transitions", async () => {
+      const previousFetch = globalThis.fetch;
+      const previousWorker = process.env.AGENT_WORKER_URL;
+      const previousMode = process.env.AGENT_BROWSER_MODE;
+      process.env.AGENT_WORKER_URL = "http://worker.test";
+      delete process.env.AGENT_BROWSER_MODE;
+      let upstream;
+      const encoder = new TextEncoder();
+      const emit = (event) => upstream.enqueue(encoder.encode(JSON.stringify({ at: new Date().toISOString(), ...event }) + "\n"));
+      globalThis.fetch = async () => new Response(new ReadableStream({ start(controller) { upstream = controller; emit({ type: "status", status: "queued" }); } }));
+      const waitFor = async (id, status) => {
+        for (let attempt = 0; attempt < 100; attempt++) {
+          const saved = await store.module.getInvestigation("alice", id);
+          if (saved.status === status && saved.events.some((event) => event.type === "status" && event.status === status)) return saved;
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+        assert.fail(`Expected saved ${status} event`);
+      };
+      try {
+        const response = await post({ url: "https://example.com/" });
+        const id = response.headers.get("X-Investigation-ID");
+        await waitFor(id, "queued");
+        emit({ type: "status", status: "running" });
+        await waitFor(id, "running");
+        emit({ type: "complete", result: structuredClone(original.result) });
+        upstream.close();
+        await response.text();
+        assert.equal((await store.module.getInvestigation("alice", id)).status, "completed");
+      } finally {
+        globalThis.fetch = previousFetch;
+        if (previousWorker === undefined) delete process.env.AGENT_WORKER_URL; else process.env.AGENT_WORKER_URL = previousWorker;
+        if (previousMode === undefined) delete process.env.AGENT_BROWSER_MODE; else process.env.AGENT_BROWSER_MODE = previousMode;
+      }
     });
     await t.test("missing passing evidence remains unverified", () => {
       const result = comparison.module.compareInvestigations(original, { findings: [], checkEvidence: [] });
@@ -126,7 +218,7 @@ test("persistent history, ownership, and repeated verification", async (t) => {
   } finally {
     await rm(directory, { recursive: true, force: true });
     for (const [key, value] of Object.entries(savedEnv)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
-    delete globalThis.__historyUser; delete globalThis.__historyOrigin; delete globalThis.__historyChecks; delete globalThis.__planAllowance;
+    delete globalThis.__historyUser; delete globalThis.__historyOrigin; delete globalThis.__historyChecks; delete globalThis.__planAllowance; delete globalThis.__historyFailure;
   }
 });
 

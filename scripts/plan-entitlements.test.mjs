@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { transpileModule, ModuleKind, ScriptTarget } from "typescript";
+import { DatabaseSync } from "node:sqlite";
 
 const dataUrl = (source) => `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
 let source = readFileSync(new URL("../lib/plan-entitlements.ts", import.meta.url), "utf8");
@@ -129,3 +130,30 @@ test("relogin imports existing active purchases by verified customer email", asy
 });
 
 test.after(() => { delete globalThis.__planStore; });
+
+test("D1 plan storage enforces concurrent limits, ownership, timestamp order and refunds", async () => {
+  const database = new DatabaseSync(":memory:");
+  const { readdirSync } = await import("node:fs");
+  for (const name of readdirSync(new URL("../drizzle/", import.meta.url)).filter((name) => name.endsWith(".sql")).sort()) database.exec(readFileSync(new URL(`../drizzle/${name}`, import.meta.url), "utf8"));
+  const source = readFileSync(new URL("../lib/plan-runtime.d1.ts", import.meta.url), "utf8");
+  const { d1PlanStore } = await import(dataUrl(transpileModule(source, { compilerOptions: { module: ModuleKind.ESNext, target: ScriptTarget.ES2022 } }).outputText));
+  const binding = { prepare(sql) { return { bind(...params) { const statement = database.prepare(sql); return { async run() { return statement.run(...params); }, async first() { return statement.get(...params) || null; }, async all() { return { results: statement.all(...params) }; } }; } }; } };
+  const store = d1PlanStore(binding);
+  try {
+    const reservations = await Promise.all(Array.from({ length: 20 }, () => store.reserveUsage("alice", "alice@example.com", "2026-10", 3)));
+    assert.equal(reservations.filter((count) => count !== null).length, 3);
+    assert.equal(await store.getUsage("alice", "2026-10"), 3);
+    assert.equal(await store.getUsage("bob", "2026-10"), 0);
+    for (let index = 0; index < 5; index++) await store.releaseUsage("alice", "2026-10");
+    assert.equal(await store.getUsage("alice", "2026-10"), 0);
+    const entitlement = { userId: "alice", email: "alice@example.com", plan: "pro", status: "active", subscriptionId: "sub_test", productId: "product_test", eventTimestamp: "2026-10-13T10:00:00Z", updatedAt: "2026-10-13T10:00:00Z" };
+    await store.setEntitlement(entitlement);
+    await store.setEntitlement({ ...entitlement, status: "cancelled", eventTimestamp: "2026-10-12T00:00:00Z" });
+    await store.setEntitlement({ ...entitlement, userId: "bob", plan: "studio" });
+    assert.deepEqual(await store.getEntitlements("alice"), [entitlement]);
+    assert.deepEqual(await store.getEntitlements("bob"), []);
+    await store.setLastSync("alice", "alice@example.com");
+    assert.ok(Date.parse(await store.getLastSync("alice")));
+    assert.equal(await store.getLastSync("bob"), null);
+  } finally { database.close(); }
+});

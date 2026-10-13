@@ -242,6 +242,11 @@
 .footer button:focus-visible { outline: 3px solid #72d8b8; outline-offset: 4px; }
 .footer button:disabled::before { display: none; }
 
+.card { opacity: 1; transform: none; }
+.confidence i { animation: none; }
+.footer button { background: linear-gradient(135deg,#066a5a,#087c68); }
+.evidenceLabel, .confidence { color: #536b68; }
+
 @keyframes drawLine {
   from { transform: scaleX(0); opacity: 0.5; }
   to { transform: scaleX(1); opacity: 1; }

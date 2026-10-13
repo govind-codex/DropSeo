@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { base64url } from "jose";
 import { authConfig, cookieOptions, FLOW_COOKIE, signAuthToken } from "@/lib/auth";
 
+import { readInvestigationIntent, intentDestination } from "@/lib/investigation-intent";
+
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
@@ -11,6 +13,8 @@ export async function GET(request: Request) {
     console.error("Google OAuth configuration error:", error instanceof Error ? error.message : "Unknown configuration error");
     return NextResponse.redirect(new URL("/login?error=configuration", request.url), { headers: { "Cache-Control": "no-store" } });
   }
+  const intent = readInvestigationIntent(new URL(request.url).searchParams);
+  const returnTo = intent ? intentDestination(intent) : "/dashboard";
   const state = base64url.encode(crypto.getRandomValues(new Uint8Array(32)));
   const nonce = base64url.encode(crypto.getRandomValues(new Uint8Array(32)));
   const verifier = base64url.encode(crypto.getRandomValues(new Uint8Array(32)));
@@ -19,6 +23,6 @@ export async function GET(request: Request) {
   url.search = new URLSearchParams({ client_id: config.clientId, redirect_uri: config.callbackUrl, response_type: "code", scope: "openid email profile", state, nonce, code_challenge: challenge, code_challenge_method: "S256", prompt: "select_account" }).toString();
   const response = NextResponse.redirect(url);
   response.headers.set("Cache-Control", "no-store");
-  response.cookies.set(FLOW_COOKIE, await signAuthToken({ state, nonce, verifier }, "oauth", 600, config.secret), cookieOptions(600, config.secure));
+  response.cookies.set(FLOW_COOKIE, await signAuthToken({ state, nonce, verifier, returnTo }, "oauth", 600, config.secret), cookieOptions(600, config.secure));
   return response;
 }

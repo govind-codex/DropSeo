@@ -1,10 +1,13 @@
 import Link from "next/link";
-import { ArrowRight, Bot, Check, FileSearch, Gauge, Globe2, LockKeyhole, Route, ShieldCheck, Sparkles } from "lucide-react";
-import { GoogleSignIn } from "@/components/google-signin";
+import { ArrowRight, Bot, Check, FileSearch, Gauge, Globe2, Route, ShieldCheck, Sparkles } from "lucide-react";
+import { HalftoneHeadline } from "@/components/ui/halftone-headline";
+import { InvestigationStart } from "@/components/investigation-start";
+import { TrustLinks } from "@/components/trust-links";
 import { LandingReveal } from "@/components/landing-reveal";
 import { Pricing, type PricingPlan } from "@/components/ui/pricing";
 import Navbar from "@/components/ui/navbar-02";
 import { UserProfileMenu } from "@/components/ui/user-profile-menu";
+import { PLAN_LIMITS } from "@/lib/plan-entitlements";
 import { getSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +20,7 @@ export default async function LandingPage() {
       name: "FREE",
       price: "0",
       period: "month",
-      features: ["3 investigations each month", "Up to 4 pages per investigation", "Evidence-backed findings", "Downloadable reports"],
+      features: [`${PLAN_LIMITS.free.investigationsPerMonth} investigations each month`, `Up to ${PLAN_LIMITS.free.maxPages} pages per investigation`, "Evidence + supported verification", "PDF report exports"],
       description: "For trying AudiFox on your own site.",
       buttonText: "Start free",
       href: user ? "/dashboard" : "/api/auth/google",
@@ -28,7 +31,7 @@ export default async function LandingPage() {
       name: "PRO",
       price: "9",
       period: "month",
-      features: ["50 investigations each month", "Up to 15 pages per investigation", "Journey and performance workflows", "Verification runs and report exports"],
+      features: [`${PLAN_LIMITS.pro.investigationsPerMonth} investigations each month`, `Up to ${PLAN_LIMITS.pro.maxPages} pages per investigation`, "Evidence + supported verification", "PDF report exports"],
       description: "For growing sites that need regular checks.",
       buttonText: "Choose Pro",
       href: "/checkout",
@@ -39,8 +42,8 @@ export default async function LandingPage() {
       name: "STUDIO",
       price: "24",
       period: "month",
-      features: ["200 investigations each month", "Up to 30 pages per investigation", "Five workspace members", "Priority investigation queue"],
-      description: "For teams managing multiple websites.",
+      features: [`${PLAN_LIMITS.studio.investigationsPerMonth} investigations each month`, `Up to ${PLAN_LIMITS.studio.maxPages} pages per investigation`, "Evidence + supported verification", "PDF report exports"],
+      description: "For professionals managing multiple websites.",
       buttonText: "Choose Studio",
       href: "/checkout",
       isPopular: false,
@@ -60,18 +63,15 @@ export default async function LandingPage() {
         <section className="landing-hero">
           <LandingReveal className="hero-copy" onLoad>
             <span className="landing-eyebrow"><Sparkles size={15} /> AI WEBSITE INVESTIGATOR</span>
-            <h1><span className="hero-title-line">Website friction, handled.</span><span className="hero-title-line">Save hours every week.</span></h1>
+            <HalftoneHeadline lines={["Website friction, handled.", "Save hours every week."]} />
             <p>AudiFox explores real visitor journeys, finds what gets in the way, and brings back clear evidence so you know exactly what to fix.</p>
-            <div className="hero-actions">
-              {user ? <Link className="google-button" href="/dashboard">Open your workspace <ArrowRight size={18} /></Link> : <GoogleSignIn />}
-              <span className="signin-note"><LockKeyhole size={13} /> Secure sign-in. No card required.</span>
-            </div>
+            <InvestigationStart authenticated={Boolean(user)} />
             <div className="hero-benefits" aria-label="AudiFox benefits"><span><Check size={15} /> Evidence-backed</span><span><Check size={15} /> Safe by default</span><span><Check size={15} /> Built for any public site</span></div>
           </LandingReveal>
           <LandingReveal className="product-stage" delay={0.12} onLoad>
             <div className="stage-trust"><span><ShieldCheck size={15} /> Safe browsing</span><span>Read-only exploration</span><span>Evidence captured</span></div>
             <div className="product-preview" aria-label="Illustrative preview of an AudiFox investigation">
-            <div className="preview-toolbar"><span><Bot size={17} /> Agent workspace</span><span className="preview-label">LIVE INVESTIGATION</span></div>
+            <div className="preview-toolbar"><span><Bot size={17} /> Agent workspace</span><span className="preview-label">ILLUSTRATIVE PREVIEW</span></div>
             <div className="preview-address"><Globe2 size={17} /><span>your-website.com</span><span className="preview-scope">PUBLIC WEB</span></div>
             <div className="preview-mission"><span className="preview-agent"><Bot size={26} /></span><div><small>INVESTIGATION PLAN</small><h2>A better journey starts here.</h2></div></div>
             <div className="preview-steps"><div><span>01</span><div><strong>Explore the important paths</strong><p>Understand the site and the visitor’s goal.</p></div><Check size={18} /></div><div><span>02</span><div><strong>Investigate the friction</strong><p>Check journeys, SEO, and page performance.</p></div><Check size={18} /></div><div><span>03</span><div><strong>Bring back the evidence</strong><p>Clear findings. Practical next steps.</p></div><FileSearch size={18} /></div></div>
@@ -89,15 +89,17 @@ export default async function LandingPage() {
             <LandingReveal delay={0.18}><article><span className="capability-icon"><ShieldCheck /></span><h3>Verify your fixes</h3><p>Revisit a reported problem and check that the behavior has improved.</p></article></LandingReveal>
           </div>
         </section>
+        <section className="sample-proof"><span className="landing-eyebrow">SEE THE OUTPUT</span><h2>Evidence you can turn into a fix.</h2><p>Explore a clearly labeled example with an affected URL, observed behaviour, supporting evidence and recommended next action.</p><Link className="text-cta" href="/sample-report">View sample report <ArrowRight size={18} /></Link></section>
         <Pricing
           plans={pricingPlans}
           authenticated={Boolean(user)}
           title="Start small. Investigate deeper when you need to."
-          description="Every plan keeps AudiFox in safe mode and brings back evidence you can act on."
+          description="Every plan includes evidence, supported verification and PDF exports, within its page and time limits."
         />
-        <section className="landing-how" id="how-it-works" aria-labelledby="how-heading"><LandingReveal><span className="landing-eyebrow">FROM URL TO INSIGHT</span><h2 id="how-heading">Your next investigation<br />is three steps away.</h2><a href={user ? "/dashboard" : "/api/auth/google"} className="text-cta" target={user ? undefined : "_top"}>Open your workspace <ArrowRight size={18} /></a></LandingReveal><LandingReveal delay={0.1}><ol><li><span>1</span><div><h3>Sign in with Google</h3><p>Securely enter your AudiFox workspace.</p></div></li><li><span>2</span><div><h3>Give the agent a website</h3><p>Paste a public URL and choose a workflow.</p></div></li><li><span>3</span><div><h3>Turn findings into fixes</h3><p>Follow the investigation and review the evidence.</p></div></li></ol></LandingReveal></section>
+        <p className="pricing-rules">Allowances reset on the first of each month at 00:00 UTC. Each accepted investigation or verification, including queued runs, uses one allowance. Failures after acceptance still count. Requests rejected before acceptance release their reservation. Unused allowances do not roll over. Studio currently provides higher individual limits; shared seats and queue priority are not offered.</p>
+        <section className="landing-how" id="how-it-works" aria-labelledby="how-heading"><LandingReveal><span className="landing-eyebrow">FROM URL TO INSIGHT</span><h2 id="how-heading">Your next investigation<br />is three steps away.</h2><a href={user ? "/dashboard" : "/api/auth/google"} className="text-cta" target={user ? undefined : "_top"}>Open your workspace <ArrowRight size={18} /></a></LandingReveal><LandingReveal delay={0.1}><ol><li><span>1</span><div><h3>Enter your website and goal</h3><p>Choose what you want to learn.</p></div></li><li><span>2</span><div><h3>Sign in and investigate</h3><p>Your website and goal continue into your workspace.</p></div></li><li><span>3</span><div><h3>Turn findings into fixes</h3><p>Follow the investigation and review the evidence.</p></div></li></ol></LandingReveal></section>
       </main>
-      <footer className="landing-footer"><Link className="brand" href="/"><span className="brand-mark" aria-hidden="true"><img src="/audifox-logo.png" alt="" width="32" height="32" /></span>AudiFox<span>.</span></Link><p>Evidence before claims. Safety before actions.</p><span>© {new Date().getFullYear()} AudiFox</span></footer>
+      <footer className="landing-footer"><Link className="brand" href="/"><span className="brand-mark" aria-hidden="true"><img src="/audifox-logo.png" alt="" width="32" height="32" /></span>AudiFox<span>.</span></Link><p>Evidence before claims. Safety before actions.</p><TrustLinks /><span>© {new Date().getFullYear()} AudiFox</span></footer>
     </div>
   );
 }

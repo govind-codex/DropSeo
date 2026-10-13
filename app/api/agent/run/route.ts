@@ -1,3 +1,6 @@
+import { after } from "next/server";
+import { validateWebsiteUrl } from "@/lib/investigation-intent";
+import { prepareReportFindings, supportsVerification } from "@/lib/finding-presentation";
 import { analyzeAuthenticatedWebsite as analyzeWebsite } from "@/lib/website-analysis";
 import { getInvestigation, saveInvestigation, type Investigation } from "@/lib/investigations";
 import { compareInvestigations } from "@/lib/investigation-comparison";
@@ -66,6 +69,7 @@ export async function POST(request: Request) {
     const payload = await request.text();
     let input = JSON.parse(payload || "{}") as AgentInput;
     let reference: Investigation | null = null;
+    let selectedFindingId: string | undefined;
     if (input.workflow === "verify") {
       if (!input.investigationId) return Response.json({ error: "Open a saved investigation to verify its fixes." }, { status: 400 });
       reference = await getInvestigation(user.id, input.investigationId);
@@ -73,14 +77,24 @@ export async function POST(request: Request) {
       // Follow the immutable original, even when verifying a previous verification.
       if (reference.referenceId) reference = await getInvestigation(user.id, reference.referenceId);
       if (!reference?.result) return Response.json({ error: "Wait for the original investigation to finish before verifying." }, { status: 409 });
+      const browserAvailable = Boolean(process.env.AGENT_WORKER_URL?.trim()) && process.env.AGENT_BROWSER_MODE !== "portable";
+      if (Boolean(reference.result.browserIntelligence) !== browserAvailable) return Response.json({ error: "Targeted verification requires the original investigation engine. Start a new investigation or ask support to reconnect that engine." }, { status: 422 });
       const findings = reference.result.findings as Array<{ id: string; title: string; expected: string; workflowId?: string }>;
       const selected = input.findingId ? findings.find((item) => item.id === input.findingId) : undefined;
       if (input.findingId && !selected) return Response.json({ error: "Finding not found in the original investigation." }, { status: 404 });
-      input = { url: reference.url, workflow: "verify", goal: selected ? `${selected.title}. Expected behavior: ${selected.expected}` : reference.goal,
-        referenceUrls: reference.result.visitedPages as string[], workflowId: selected?.workflowId || (reference.result.browserIntelligence as { workflow?: { id?: string } } | undefined)?.workflow?.id };
+      if (selected && !supportsVerification(selected, reference.result)) return Response.json({ error: "This finding has no matching check that can be rerun. Start a new investigation instead." }, { status: 422 });
+      if (!selected && !findings.some((finding) => supportsVerification(finding, reference!.result!))) return Response.json({ error: "This report has no supported checks to verify." }, { status: 422 });
+      selectedFindingId = selected?.id;
+      const affected = selected ? (reference.result.checkEvidence as Array<{ url: string; checks: Array<{ name: string; pass: boolean }> }>).filter((page) => page.checks.some((check) => check.name === selected.title && !check.pass)).map((page) => page.url) : reference.result.visitedPages as string[];
+      input = { url: affected?.[0] || reference.url, workflow: "verify", goal: selected ? `${selected.title}. Expected behavior: ${selected.expected}` : reference.goal,
+        referenceUrls: affected, workflowId: selected?.workflowId || (reference.result.browserIntelligence as { workflow?: { id?: string } } | undefined)?.workflow?.id };
     } else {
       input = { url: input.url, workflow: input.workflow, goal: input.goal };
     }
+    input.url = validateWebsiteUrl(String(input.url || ""));
+    if (input.workflow && !["autonomous", "journey", "performance", "verify"].includes(input.workflow)) return Response.json({ error: "Choose a supported investigation goal." }, { status: 400 });
+    input.goal = String(input.goal || "").trim().slice(0, 500);
+    if (input.workflow === "journey" && !input.goal) return Response.json({ error: "Describe the visitor goal." }, { status: 400 });
     const allowance = await reserveInvestigation(user.id, user.email);
     if (!allowance.allowed) {
       return Response.json({
@@ -92,7 +106,7 @@ export async function POST(request: Request) {
     reservation = allowance.usage;
     input.maxPages = allowance.usage.maxPages;
     const record: Investigation = { id: crypto.randomUUID(), userId: user.id, url: String(input.url || ""), workflow: input.workflow || "autonomous", goal: String(input.goal || ""),
-      status: "running", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), referenceId: reference?.id, events: [] };
+      status: "queued", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), referenceId: reference?.id, findingId: selectedFindingId, events: [] };
     await saveInvestigation(record);
     pendingRecord = record;
     const workerUrl = process.env.AGENT_WORKER_URL?.trim();
@@ -108,11 +122,12 @@ export async function POST(request: Request) {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({ ...input, ownerId: user.id, baselineResult: reference?.result }),
+        signal: AbortSignal.timeout(240_000),
       });
 
       if (!upstream.ok || !upstream.body) {
         const message = await upstream.text();
-        record.status = "error"; record.error = message || "Browser worker unavailable."; await saveInvestigation(record);
+        record.status = "failed"; record.error = message || "Browser worker unavailable."; await saveInvestigation(record);
         await releaseInvestigation(user.id, allowance.usage.period);
         reservation = undefined;
         return Response.json({ error: message || "The browser worker could not start this run." }, { status: upstream.status || 502 });
@@ -125,7 +140,7 @@ export async function POST(request: Request) {
     return persistStream(portableAnalysisStream(request, input), record, reference);
   } catch (error) {
     if (reservation && !streamStarted) await releaseInvestigation(user.id, reservation.period).catch(() => undefined);
-    if (pendingRecord) { pendingRecord.status = "error"; pendingRecord.error = error instanceof Error ? error.message : "Unable to start investigation."; await saveInvestigation(pendingRecord).catch(() => {}); }
+    if (pendingRecord) { pendingRecord.status = "failed"; pendingRecord.error = error instanceof Error ? error.message : "Unable to start investigation."; await saveInvestigation(pendingRecord).catch(() => {}); }
     return Response.json({ error: error instanceof Error ? error.message : "Unable to start the website analysis." }, { status: 400 });
   }
 }
@@ -165,19 +180,19 @@ function portableAnalysisStream(request: Request, input: AgentInput) {
 
         const analyses = [analysis];
         const pageLinks = (input.referenceUrls ? input.referenceUrls.filter((url) => url !== analysis.url && new URL(url).origin === new URL(analysis.url).origin) : selectInvestigationLinks(analysis.links || [], analysis.url, input.goal || "")).slice(0, maxPages - 1);
-        push({ type: "snapshot", image: screenshotUrl(analysis.url), url: analysis.url, source: "rendered-page" });
-        push({ type: "activity", status: "complete", title: "Homepage evidence collected", detail: `${analysis.checks.length} checks completed and a rendered screenshot requested.` });
+        push({ type: "activity", status: "complete", title: "Homepage evidence collected", detail: `${analysis.checks.length} document checks completed. Screenshots are not captured in portable mode.` });
         push({
           type: "profile",
           profile: {
             siteType: analysis.title || "Public website",
             purpose: analysis.ai?.summary || `Multi-page technical, search and accessibility audit for ${analysis.url}`,
             primaryJourney: input.goal || "Find the highest-impact website improvements",
-            plan: ["Capture rendered homepage evidence", "Inspect important same-domain pages", "Compare technical and accessibility signals", "Prioritize verified fixes"],
+            plan: ["Collect homepage document evidence", "Inspect important same-domain pages", "Compare technical and accessibility signals", "Prioritize findings"],
           },
         });
 
         for (let index = 0; index < pageLinks.length; index += 1) {
+          if (Date.now() - startedAt > 210_000) { push({ type: "activity", status: "warning", title: "Browsing time limit reached", detail: "The report includes only pages inspected before the limit." }); break; }
           const target = pageLinks[index];
           push({ type: "activity", status: "running", title: `Inspecting page ${index + 2} of ${pageLinks.length + 1}`, detail: target });
           try {
@@ -189,7 +204,6 @@ function portableAnalysisStream(request: Request, input: AgentInput) {
             const pageAnalysis = await pageResponse.json() as Analysis;
             if (!pageResponse.ok) throw new Error(pageAnalysis.error || "Page could not be analyzed.");
             analyses.push(pageAnalysis);
-            push({ type: "snapshot", image: screenshotUrl(pageAnalysis.url), url: pageAnalysis.url, source: "rendered-page" });
             push({ type: "activity", status: "complete", title: `Page ${index + 2} verified`, detail: `${pageAnalysis.title || pathname(pageAnalysis.url)} · score ${pageAnalysis.score}/100 · ${pageAnalysis.load} ms response.` });
           } catch (error) {
             push({ type: "activity", status: "warning", title: `Page ${index + 2} could not be inspected`, detail: error instanceof Error ? error.message : target });
@@ -217,6 +231,8 @@ function portableAnalysisStream(request: Request, input: AgentInput) {
             recommendation: win.action,
             confidence: "hypothesis",
             evidenceType: "ai-analysis",
+            affectedUrls: [analysis.url],
+            evidence: [{ url: analysis.url, detail: `Unverified AI theory: ${win.why}` }],
           });
         }
 
@@ -236,6 +252,8 @@ function portableAnalysisStream(request: Request, input: AgentInput) {
           workflow,
           goal: String(input.goal || ""),
           status: "completed",
+          completedAt: new Date().toISOString(),
+          mode: "portable-analysis",
           outcome,
           visitedPages: analyses.map((item) => item.url),
           actions: analyses.map((item, index) => ({ sequence: index + 1, action: "inspect", ok: true, url: item.url })),
@@ -269,10 +287,6 @@ function streamHeaders() {
     "Cache-Control": "no-cache, no-transform",
     "X-Content-Type-Options": "nosniff",
   };
-}
-
-function screenshotUrl(url: string) {
-  return `https://s.wordpress.com/mshots/v1/${encodeURIComponent(url)}?w=1200`;
 }
 
 function pathname(url: string) {
@@ -333,15 +347,19 @@ function aggregateFindings(analyses: Analysis[]) {
       observed: `${failures.length} of ${analyses.length} pages failed: ${failures.map((failure) => `${pathname(failure.url)} — ${failure.detail}`).join("; ")}`,
       recommendation: `${check.fix} Start with ${pathname(failures[0].url)}${failures.length > 1 ? `, then apply the correction consistently to the other ${failures.length - 1} affected page${failures.length > 2 ? "s" : ""}.` : "."}`,
       confidence: "verified",
-      evidenceType: "multi-page + screenshot",
+      evidenceType: "document-check",
+      affectedUrls: failures.map((failure) => failure.url),
+      evidence: failures.map((failure) => ({ url: failure.url, detail: failure.detail })),
     }));
 }
 
 function persistStream(response: Response, record: Investigation, reference: Investigation | null) {
   const encoder = new TextEncoder();
   let disconnected = false;
+  let finished: Promise<void> = Promise.resolve();
   const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
+    start(controller) {
+      finished = (async () => {
       const send = (event: Record<string, unknown>) => { if (!disconnected) controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`)); };
       send({ type: "saved", investigationId: record.id });
       const reader = response.body!.getReader();
@@ -349,11 +367,17 @@ function persistStream(response: Response, record: Investigation, reference: Inv
       let buffer = "";
       async function accept(event: Record<string, unknown>) {
         if (event.type === "complete") {
-          const result = event.result as Record<string, unknown>;
-          if (reference) result.comparison = compareInvestigations(reference, result);
+          const result = prepareReportFindings(event.result as Record<string, unknown>);
+          if (reference) {
+            const baseline = record.findingId ? { ...reference, result: { ...reference.result, findings: (reference.result!.findings as Array<{ id: string }>).filter((finding) => finding.id === record.findingId) } } : reference;
+            result.comparison = compareInvestigations(baseline, result);
+            result.verifiedAt = new Date().toISOString();
+          }
           record.result = result; record.status = "completed";
         }
-        if (event.type === "error") { record.status = "error"; record.error = String(event.error); }
+        if (event.type === "run") record.status = "running";
+        if (event.type === "status" && ["queued", "running"].includes(String(event.status))) record.status = event.status as "queued" | "running";
+        if (event.type === "error") { record.status = "failed"; record.error = String(event.error); }
         record.events.push(event);
         // Persist before delivering so refreshes and disconnected clients keep all evidence.
         await saveInvestigation(record);
@@ -368,16 +392,19 @@ function persistStream(response: Response, record: Investigation, reference: Inv
           if (done) break;
         }
         if (buffer.trim()) await accept(JSON.parse(buffer));
-        if (record.status === "running") throw new Error("The investigation ended before a report was completed.");
+        if (record.status === "running" || record.status === "queued") throw new Error("The investigation ended before a report was completed.");
       } catch (error) {
-        record.status = "error"; record.error = error instanceof Error ? error.message : "Investigation interrupted.";
+        record.status = "failed"; record.error = error instanceof Error ? error.message : "Investigation interrupted.";
         const event = { type: "error", error: record.error, at: new Date().toISOString() };
         record.events.push(event);
         await saveInvestigation(record).catch(() => {});
         send(event);
       } finally { reader.releaseLock(); if (!disconnected) controller.close(); }
+      })();
     },
     cancel() { disconnected = true; },
   });
+  // Keep persistence alive after the response or browser connection closes.
+  after(async () => { await finished; });
   return new Response(stream, { headers: { ...streamHeaders(), "X-Investigation-ID": record.id } });
 }

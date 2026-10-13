@@ -48,7 +48,7 @@ export default function Navbar() {
             <a href="/api/auth/google" target="_top">Sign in</a>
           </Button>
           <Button className="hidden bg-[#087c68] text-white shadow-[0_7px_18px_rgba(8,124,104,0.2)] hover:-translate-y-0.5 hover:bg-[#066d5b] hover:shadow-[0_10px_24px_rgba(8,124,104,0.28)] sm:inline-flex" asChild>
-            <a href="/api/auth/google" target="_top">Get started <ArrowRight aria-hidden="true" /></a>
+            <a href="#hero-url">Investigate website <ArrowRight aria-hidden="true" /></a>
           </Button>
           <div className="md:hidden">
             <NavigationSheet />

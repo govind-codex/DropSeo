@@ -68,9 +68,9 @@ const server = http.createServer(async (req, res) => {
     try {
       const input = await readBody(req);
       res.writeHead(200, { "content-type": "application/x-ndjson", "cache-control": "no-cache, no-transform", "access-control-allow-origin": "*", connection: "keep-alive" });
-      if (activeRuns >= MAX_CONCURRENT_RUNS) emit(res, { type: "activity", status: "running", title: "Run queued", detail: "The browser worker is finishing another investigation before this one starts." });
+      if (activeRuns >= MAX_CONCURRENT_RUNS) emit(res, { type: "status", status: "queued", detail: "Waiting for a browser worker." });
       const release = await acquireRunSlot();
-      try { await runAgent(input, res); }
+      try { emit(res, { type: "status", status: "running" }); await runAgent(input, res); }
       finally { release(); }
       return res.end();
     } catch (error) {

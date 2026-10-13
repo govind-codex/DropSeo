@@ -15,6 +15,7 @@ const menuItems = [
   { label: "Home", href: "/", icon: Home, accent: "bg-[#e3f5ee] text-[#087c68]" },
   { label: "Workspace", href: "/dashboard", icon: LayoutDashboard, accent: "bg-[#e7f5ff] text-[#1676a3]" },
   { label: "My Investigations", href: "/investigations", icon: History, accent: "bg-[#e9efff] text-[#4b63c7]" },
+  { label: "Settings & help", href: "/settings", icon: Home, accent: "bg-[#e3f5ee] text-[#087c68]" },
   { label: "Billing", href: "/checkout", icon: CreditCard, accent: "bg-[#fff2dc] text-[#a46513]" },
 ];
 
@@ -57,7 +58,7 @@ export function UserProfileMenu({ user, className }: UserProfileMenuProps) {
         aria-label="Open profile menu"
         aria-expanded={open}
         aria-controls={menuId}
-        aria-haspopup="menu"
+        aria-haspopup="true"
         onClick={() => setOpen((current) => !current)}
       >
         <span className="grid size-8 place-items-center rounded-full bg-linear-to-br from-[#bfe8d9] to-[#dff5ed] text-xs font-bold text-[#08705d] ring-1 ring-[#99cfbd] transition-transform duration-300 group-hover:scale-105" aria-hidden="true">{initial}</span>
@@ -69,7 +70,7 @@ export function UserProfileMenu({ user, className }: UserProfileMenuProps) {
           <motion.aside
             id={menuId}
             className="absolute right-0 top-[calc(100%+10px)] z-60 w-[min(19rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-[#badbce] bg-linear-to-b from-[#f5fcf9] via-white to-white p-2 text-[#294742] shadow-[0_24px_70px_rgba(8,87,73,0.24)]"
-            role="menu"
+
             aria-label="User profile menu"
             initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -14, scaleY: 0.94 }}
             animate={{ opacity: 1, y: 0, scaleY: 1 }}
@@ -87,7 +88,7 @@ export function UserProfileMenu({ user, className }: UserProfileMenuProps) {
             <motion.span
               className="pointer-events-none absolute -right-8 -top-10 size-28 rounded-full bg-[#8fe1c5]/25 blur-2xl"
               aria-hidden="true"
-              animate={reduceMotion ? undefined : { x: [0, -9, 0], y: [0, 7, 0] }}
+              animate={undefined}
               transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
             />
             <motion.div
@@ -99,12 +100,12 @@ export function UserProfileMenu({ user, className }: UserProfileMenuProps) {
               <motion.span
                 className="grid size-11 shrink-0 place-items-center rounded-full bg-linear-to-br from-[#b9e5d5] to-[#e2f7ef] text-sm font-bold text-[#08705d] ring-1 ring-[#91cdb9]"
                 aria-hidden="true"
-                animate={reduceMotion ? undefined : { boxShadow: ["0 0 0 0 rgba(16,162,130,0)", "0 0 0 6px rgba(16,162,130,0.10)", "0 0 0 0 rgba(16,162,130,0)"] }}
+                animate={undefined}
                 transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
               >{initial}</motion.span>
               <span className="min-w-0">
                 <strong className="block truncate text-sm font-semibold">{user.name}</strong>
-                <span className="block truncate text-xs text-[#71857f]">{user.email}</span>
+                <span className="block truncate text-xs text-[#536b62]">{user.email}</span>
               </span>
             </motion.div>
 
@@ -121,7 +122,7 @@ export function UserProfileMenu({ user, className }: UserProfileMenuProps) {
                     <Link
                       className="group flex items-center rounded-xl px-2.5 py-2 text-sm font-medium text-[#49655d] transition-[color,background-color,transform] hover:translate-x-0.5 hover:bg-[#edf8f4] hover:text-[#087c68] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#6bd0bb]"
                       href={item.href}
-                      role="menuitem"
+
                       onClick={() => setOpen(false)}
                     >
                       <span className={cn("mr-3 grid size-8 shrink-0 place-items-center rounded-lg transition-transform duration-200 group-hover:scale-105", item.accent)} aria-hidden="true"><Icon className="size-4" /></span>
@@ -145,7 +146,7 @@ export function UserProfileMenu({ user, className }: UserProfileMenuProps) {
               <button
                 className="flex w-full items-center rounded-xl px-3 py-2.5 text-sm font-medium text-[#a3423d] transition-colors hover:bg-[#fff1ef] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#db8b83] disabled:cursor-progress disabled:opacity-65"
                 type="submit"
-                role="menuitem"
+
                 disabled={signingOut}
               >
                 {signingOut ? <Loader2 className="mr-3 size-4.5 animate-spin" aria-hidden="true" /> : <LogOut className="mr-3 size-4.5" aria-hidden="true" />}

@@ -69,7 +69,7 @@ function entitlementIsActive(entitlement: StoredPlanEntitlement | null, now = ne
 function requireStore() {
   const store = planDocumentStore();
   if (store) return store;
-  if (process.env.NODE_ENV === "production") throw new Error("MONGODB_URI is required to enforce plan usage in production.");
+  if (process.env.NODE_ENV === "production") throw new Error("Persistent plan storage is required. Configure MongoDB for Next.js or a migrated D1 DB binding for Cloudflare.");
   return null;
 }
 

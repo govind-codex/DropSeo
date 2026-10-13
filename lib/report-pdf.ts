@@ -6,9 +6,15 @@ type PdfFinding = {
   observed: string;
   recommendation: string;
   confidence: string;
+  affectedUrls?: string[];
+  evidence?: Array<{ url: string; detail: string; capturedAt?: string; image?: string }>;
+  verificationSupported?: boolean;
 };
 
 type PdfReport = {
+  completedAt?: string;
+  verifiedAt?: string;
+  comparison?: { referenceId: string; issues: Array<{ finding: { title: string }; status: string; detail: string }> };
   runId: string;
   workflow: string;
   goal: string;
@@ -36,6 +42,9 @@ type ExportPdfInput = {
   result: PdfReport;
   profile: PdfProfile;
   targetUrl: string;
+  investigationId?: string;
+  createdAt?: string;
+  download?: boolean;
 };
 
 const colors = {
@@ -54,10 +63,10 @@ function pdfSafe(value: unknown) {
     .replace(/[\u2018\u2019]/g, "'")
     .replace(/[\u201c\u201d]/g, '"')
     .replace(/\u2026/g, "...")
-    .replace(/[^\x20-\x7E\n]/g, "");
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "");
 }
 
-export async function exportInvestigationPdf({ result, profile, targetUrl }: ExportPdfInput) {
+export async function exportInvestigationPdf({ result, profile, targetUrl, investigationId, createdAt, download = true }: ExportPdfInput) {
   const { jsPDF } = await import("jspdf");
   const doc = new jsPDF({
     orientation: "portrait",
@@ -67,6 +76,21 @@ export async function exportInvestigationPdf({ result, profile, targetUrl }: Exp
     putOnlyUsedFonts: true,
     precision: 2,
   });
+
+  for (const style of ["normal", "bold"] as const) {
+    const filename = style === "bold" ? "NotoSans-Bold.ttf" : "NotoSans-Regular.ttf";
+    const response = await fetch(`/fonts/${filename}`);
+    if (!response.ok) throw new Error("Report font could not be loaded. Reconnect and retry.");
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    let binary = "";
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    doc.addFileToVFS(filename, btoa(binary));
+    doc.addFont(filename, "NotoSans", style);
+  }
+  doc.setFont("NotoSans", "normal");
+  const font = doc.getFont() as unknown as { metadata: { characterToGlyph(code: number): number } };
+  const content = pdfSafe(JSON.stringify({ result, profile, targetUrl }));
+  if ([...content].some((character) => character.codePointAt(0)! > 32 && !font.metadata.characterToGlyph(character.codePointAt(0)!))) throw new Error("This report contains characters the PDF font cannot display. Use your browser's Print to PDF to preserve them.");
 
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -92,12 +116,15 @@ export async function exportInvestigationPdf({ result, profile, targetUrl }: Exp
   ) => {
     const size = options.size ?? 10;
     const leading = options.leading ?? size * 1.45;
-    const lines = doc.splitTextToSize(pdfSafe(value), width) as string[];
-    doc.setFont("helvetica", options.style ?? "normal");
+    doc.setFont("NotoSans", options.style ?? "normal");
     doc.setFontSize(size);
     doc.setTextColor(...(options.color ?? colors.ink));
-    doc.text(lines, x, y, { lineHeightFactor: leading / size });
-    y += lines.length * leading;
+    const lines = doc.splitTextToSize(pdfSafe(value), width) as string[];
+    for (const line of lines) {
+      ensureSpace(leading + 4);
+      doc.text(line, x, y);
+      y += leading;
+    }
     return lines.length * leading;
   };
 
@@ -106,7 +133,7 @@ export async function exportInvestigationPdf({ result, profile, targetUrl }: Exp
     y += 10;
     doc.setFillColor(...colors.green);
     doc.roundedRect(margin, y - 3, 4, 18, 2, 2, "F");
-    doc.setFont("helvetica", "bold");
+    doc.setFont("NotoSans", "bold");
     doc.setFontSize(15);
     doc.setTextColor(...colors.ink);
     doc.text(pdfSafe(title), margin + 13, y + 10);
@@ -120,28 +147,29 @@ export async function exportInvestigationPdf({ result, profile, targetUrl }: Exp
     creator: "AudiFox Agent",
   });
 
-  doc.setFillColor(...colors.greenSoft);
-  doc.roundedRect(margin, y, contentWidth, 116, 14, 14, "F");
-  doc.setTextColor(...colors.green);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
-  doc.text("AUDIFOX - EVIDENCE REPORT", margin + 20, y + 25);
-  doc.setTextColor(...colors.ink);
-  doc.setFontSize(21);
-  doc.text("Website investigation", margin + 20, y + 52);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.setTextColor(...colors.muted);
   const site = pdfSafe(targetUrl || result.visitedPages[0] || "Unknown website");
-  doc.text(doc.splitTextToSize(site, contentWidth - 40), margin + 20, y + 73);
-  doc.text(`Run ${pdfSafe(result.runId)}  |  ${pdfSafe(result.workflow)}  |  ${pdfSafe(new Date().toLocaleString())}`, margin + 20, y + 99);
-  y += 136;
+  doc.setFont("NotoSans", "normal"); doc.setFontSize(9);
+  const siteLines = doc.splitTextToSize(site, contentWidth - 40) as string[];
+  const headerHeight = Math.max(116, 95 + siteLines.length * 13);
+  doc.setFillColor(...colors.greenSoft);
+  doc.roundedRect(margin, y, contentWidth, headerHeight, 14, 14, "F");
+  doc.setTextColor(...colors.green); doc.setFont("NotoSans", "bold"); doc.setFontSize(11);
+  doc.text("AUDIFOX - EVIDENCE REPORT", margin + 20, y + 25);
+  doc.setTextColor(...colors.ink); doc.setFontSize(21);
+  doc.text("Website investigation", margin + 20, y + 52);
+  doc.setFont("NotoSans", "normal"); doc.setFontSize(9); doc.setTextColor(...colors.muted);
+  doc.text(siteLines, margin + 20, y + 73, { lineHeightFactor: 13 / 9 });
+  const runLabel = `Run ${pdfSafe(result.runId)} | ${pdfSafe(result.workflow)} | ${pdfSafe(result.completedAt || createdAt || "Date not recorded")}`;
+  doc.text(doc.splitTextToSize(runLabel, contentWidth - 40), margin + 20, y + headerHeight - 18);
+  y += headerHeight + 20;
 
+  if (investigationId) writeText(`Investigation ID: ${investigationId}`, margin, contentWidth, { size: 9 });
+  writeText(`Exported: ${new Date().toISOString()}`, margin, contentWidth, { size: 9 });
   sectionTitle("Executive summary");
   writeText(result.outcome || "Investigation completed.", margin, contentWidth, { size: 11, leading: 17 });
   if (result.goal) {
     y += 7;
-    doc.setFont("helvetica", "bold");
+    doc.setFont("NotoSans", "bold");
     doc.setFontSize(9);
     doc.setTextColor(...colors.green);
     doc.text("GOAL", margin, y);
@@ -164,11 +192,11 @@ export async function exportInvestigationPdf({ result, profile, targetUrl }: Exp
     doc.setFillColor(248, 251, 250);
     doc.setDrawColor(...colors.line);
     doc.roundedRect(x, y, metricWidth, 62, 8, 8, "FD");
-    doc.setFont("helvetica", "normal");
+    doc.setFont("NotoSans", "normal");
     doc.setFontSize(8);
     doc.setTextColor(...colors.muted);
     doc.text(pdfSafe(label).toUpperCase(), x + 11, y + 19);
-    doc.setFont("helvetica", "bold");
+    doc.setFont("NotoSans", "bold");
     doc.setFontSize(15);
     doc.setTextColor(...colors.ink);
     doc.text(pdfSafe(value), x + 11, y + 43);
@@ -182,7 +210,7 @@ export async function exportInvestigationPdf({ result, profile, targetUrl }: Exp
     writeText(profile.purpose, margin, contentWidth, { size: 9.5, leading: 14, color: colors.muted });
   }
 
-  sectionTitle(`Verified findings (${result.findings.length})`);
+  sectionTitle(`Findings (${result.findings.length})`);
   if (!result.findings.length) {
     doc.setFillColor(...colors.greenSoft);
     doc.roundedRect(margin, y, contentWidth, 44, 8, 8, "F");
@@ -192,28 +220,34 @@ export async function exportInvestigationPdf({ result, profile, targetUrl }: Exp
   }
 
   result.findings.forEach((finding, index) => {
-    const titleLines = doc.splitTextToSize(pdfSafe(`${index + 1}. ${finding.title}`), contentWidth - 30) as string[];
-    const observedLines = doc.splitTextToSize(pdfSafe(finding.observed), contentWidth - 30) as string[];
-    const recommendationLines = doc.splitTextToSize(pdfSafe(finding.recommendation), contentWidth - 30) as string[];
-    const cardHeight = Math.max(104, 52 + titleLines.length * 14 + observedLines.length * 12 + recommendationLines.length * 12);
-    ensureSpace(Math.min(cardHeight, contentBottom - margin));
-    const cardTop = y;
-    doc.setFillColor(250, 252, 251);
-    doc.setDrawColor(...colors.line);
-    doc.roundedRect(margin, cardTop, contentWidth, cardHeight, 9, 9, "FD");
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
-    const severityColor = finding.severity.toLowerCase() === "high" ? colors.warning : colors.green;
-    doc.setTextColor(severityColor[0], severityColor[1], severityColor[2]);
-    doc.text(`${pdfSafe(finding.severity).toUpperCase()}  |  ${pdfSafe(finding.category).toUpperCase()}`, margin + 15, cardTop + 18);
-    y = cardTop + 37;
-    writeText(`${index + 1}. ${finding.title}`, margin + 15, contentWidth - 30, { size: 11, leading: 14, style: "bold" });
-    y += 4;
-    writeText(`Observed: ${finding.observed}`, margin + 15, contentWidth - 30, { size: 8.5, leading: 12, color: colors.muted });
-    y += 3;
-    writeText(`Recommended: ${finding.recommendation}`, margin + 15, contentWidth - 30, { size: 8.5, leading: 12, color: colors.ink });
-    y = cardTop + cardHeight + (index === result.findings.length - 1 ? 0 : 10);
+    ensureSpace(80);
+    y += 12;
+    writeText(`${finding.severity.toUpperCase()} | ${finding.category} | ${finding.confidence === "hypothesis" ? "UNVERIFIED THEORY" : "OBSERVED CHECK; FIX NOT VERIFIED"}`, margin, contentWidth, { size: 9, leading: 14, color: colors.green, style: "bold" });
+    writeText(`${index + 1}. ${finding.title}`, margin, contentWidth, { size: 12, leading: 17, style: "bold" });
+    writeText(`Affected URLs: ${finding.affectedUrls?.join(", ") || "Not recorded"}`, margin, contentWidth, { size: 9, leading: 14 });
+    writeText(`Expected: ${finding.expected}`, margin, contentWidth, { size: 9, leading: 14 });
+    writeText(`Observed: ${finding.observed}`, margin, contentWidth, { size: 9, leading: 14 });
+    writeText(`Recommended next action: ${finding.recommendation}`, margin, contentWidth, { size: 9, leading: 14 });
+    writeText(`Verification: ${finding.verificationSupported ? "Matching check can be rerun as a separate investigation" : "Targeted verification unavailable"}`, margin, contentWidth, { size: 9, leading: 14 });
+    if (finding.evidence?.length) for (const evidence of finding.evidence) {
+      writeText(`Evidence${evidence.capturedAt ? ` (${evidence.capturedAt})` : ""}: ${evidence.url} - ${evidence.detail}`, margin, contentWidth, { size: 9, leading: 14, color: colors.muted });
+      if (evidence.image) {
+        const image = doc.getImageProperties(evidence.image);
+        const scale = Math.min(contentWidth / image.width, 180 / image.height);
+        const height = image.height * scale;
+        ensureSpace(height + 28);
+        writeText("Saved screenshot context for the affected page", margin, contentWidth, { size: 8, leading: 12 });
+        doc.addImage(evidence.image, image.fileType, margin, y, image.width * scale, height);
+        y += height + 12;
+      }
+    }
+    else writeText("Supporting artifact not recorded. Reproduce before relying on this finding.", margin, contentWidth, { size: 9, leading: 14 });
   });
+  if (result.comparison) {
+    sectionTitle("Verification comparison");
+    writeText(`Original investigation: ${result.comparison.referenceId}. Verification date: ${result.verifiedAt || result.completedAt || createdAt || "Not recorded"}`, margin, contentWidth, { size: 9, leading: 14 });
+    for (const issue of result.comparison.issues) writeText(`${issue.status}: ${issue.finding.title} - ${issue.detail}`, margin, contentWidth, { size: 9, leading: 14 });
+  }
 
   const pagesPreviewHeight = 38 + Math.min(result.visitedPages.length, 6) * 15;
   ensureSpace(pagesPreviewHeight);
@@ -227,7 +261,7 @@ export async function exportInvestigationPdf({ result, profile, targetUrl }: Exp
   const pageCount = doc.getNumberOfPages();
   for (let page = 1; page <= pageCount; page += 1) {
     doc.setPage(page);
-    doc.setFont("helvetica", "normal");
+    doc.setFont("NotoSans", "normal");
     doc.setFontSize(8);
     doc.setTextColor(...colors.muted);
     doc.text(`AudiFox - Evidence before claims - ${result.safety.blockedActions} actions blocked`, margin, pageHeight - 24);
@@ -235,5 +269,6 @@ export async function exportInvestigationPdf({ result, profile, targetUrl }: Exp
   }
 
   const filename = `audifox-report-${pdfSafe(result.runId).slice(0, 8) || "investigation"}.pdf`;
-  doc.save(filename);
+  if (download) doc.save(filename);
+  return doc;
 }

@@ -30,13 +30,13 @@
 Public URL -> Investigation plan -> Safe browser actions -> Live evidence -> Findings -> Verify or export PDF
 ```
 
-1. Sign in with Google, enter a public website, and choose a workflow.
+1. Enter a public HTTP(S) website and choose a goal on the homepage; Google sign-in preserves your inputs.
 2. The agent profiles the site, creates a plan, and explores same-domain pages in read-only mode.
-3. Progress, screenshots, actions, and verified findings stream into the workspace live.
+3. Saved status and events keep the workspace current after refresh or reconnection. Browser mode captures screenshots and actions; portable mode collects document checks.
 4. Each finding explains the expected behavior, observed behavior, evidence, severity, and recommended fix.
-5. Runs are saved to investigation history. Fixes can be checked again and reports downloaded as PDF.
+5. Runs are saved to investigation history. Supported checks can be verified in a separate dated result, and reports exported as PDF.
 
-> AudiFox blocks purchases, form submissions, sensitive fields, and other consequential actions.
+> Browser mode applies best-effort controls against purchases, form submissions, sensitive fields and other consequential actions. Inspect only websites you are authorized to investigate.
 
 ## Run locally
 
@@ -47,15 +47,23 @@ npm run dev
 
 Copy `.env.example` to `.env.local`, add your credentials, then open [localhost:3000](http://localhost:3000).
 
-Required services: **Gemini** and **Google OAuth**. Production history uses **MongoDB or Cloudflare D1**; payments and a separate browser worker are optional.
+Sign-in requires **Google OAuth**. Browser investigations require **Gemini** and a browser worker; portable document checks can finish without AI enrichment. Next.js production needs **MongoDB** for allowances, with MongoDB or remote D1 for history. Cloudflare production uses a migrated **D1 DB binding** for history and allowances. Payments are optional.
 
 ## Useful commands
 
 ```bash
 npm run dev       # Web app + browser worker
 npm test          # Test agent workflows
+npm run test:auth
+npm run test:investigations
+npm run test:plans
+npm run test:launch
 npm run lint      # Check the codebase
 npm run build     # Production build
 ```
+
+See [the launch review checklist](docs/launch-review.md) for test evidence, isolated browser-check setup, the D1 migration and required owner/engineering sign-off. This implementation is prepared for review; outstanding production and policy gates prevent a launch-ready claim.
+
+Report exports embed Noto Sans, distributed under its [Open Font License](public/fonts/OFL.txt).
 
 Built with Next.js, React, Gemini, Playwright, WebCMD, MongoDB/D1, and Dodo Payments. Requires Node.js 22.17+.

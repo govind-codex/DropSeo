@@ -51,7 +51,7 @@ export function NavigationSheet() {
             <a href="/api/auth/google" target="_top">Sign in</a>
           </Button>
           <Button className="bg-[#087c68] text-white shadow-sm hover:bg-[#066d5b]" asChild>
-            <a href="/api/auth/google" target="_top">Get started <ArrowRight aria-hidden="true" /></a>
+            <a href="#hero-url">Investigate website <ArrowRight aria-hidden="true" /></a>
           </Button>
         </div>
       </SheetContent>

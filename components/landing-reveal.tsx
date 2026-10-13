@@ -17,7 +17,7 @@ export function LandingReveal({ children, className, delay = 0, onLoad = false }
   return (
     <motion.div
       className={className}
-      initial={reducedMotion ? false : { opacity: 0, y: 20 }}
+      initial={false}
       animate={onLoad ? visible : undefined}
       whileInView={onLoad ? undefined : visible}
       viewport={onLoad ? undefined : { once: true, amount: 0.15, margin: "0px 0px -32px 0px" }}

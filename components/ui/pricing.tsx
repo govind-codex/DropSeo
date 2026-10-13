@@ -61,7 +61,7 @@ export function Pricing({
           {plans.map((plan, index) => (
             <motion.article
               key={plan.id}
-              initial={prefersReducedMotion ? false : { y: 28, opacity: 0 }}
+              initial={false}
               whileInView={{
                 y: isDesktop && plan.isPopular ? -14 : 0,
                 opacity: 1,
@@ -95,9 +95,9 @@ export function Pricing({
                       className="tabular-nums"
                     />
                   </span>
-                  <span className="pb-1 text-sm font-semibold text-[#6a8179]">/ {plan.period}</span>
+                  <span className="pb-1 text-sm font-semibold text-[#536b62]">/ {plan.period}</span>
                 </div>
-                <p className="mt-2 text-xs text-[#71867e]">{plan.id === "free" ? "Free forever" : "Billed monthly"}</p>
+                <p className="mt-2 text-xs text-[#536b62]">{plan.id === "free" ? "No subscription required" : "USD / billed monthly; confirm total at checkout"}</p>
 
                 <ul className="my-6 flex flex-col gap-3 border-t border-[#dfeae6] pt-6">
                   {plan.features.map((feature) => (
@@ -129,7 +129,7 @@ export function Pricing({
         </div>
 
         <p className="mx-auto mt-7 text-center text-xs leading-5 text-[#a9cfc1]">
-          Taxes may apply based on your location. Cancel paid plans anytime.
+          Taxes may apply. Checkout confirms the final price. Contact support for subscription changes.
         </p>
       </div>
     </section>

@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { d1PlanStore } from "./plan-runtime.d1";
 export type InvestigationDocumentStore = {
   save(record: unknown): Promise<void>;
   get(userId: string, id: string): Promise<unknown | null>;
@@ -19,4 +20,4 @@ export type PlanDocumentStore = {
 };
 export function investigationDatabase(): D1Database | null { return env.DB || null; }
 export function investigationDocumentStore(): InvestigationDocumentStore | null { return null; }
-export function planDocumentStore(): PlanDocumentStore | null { return null; }
+export function planDocumentStore(): PlanDocumentStore | null { return env.DB ? d1PlanStore(env.DB) : null; }

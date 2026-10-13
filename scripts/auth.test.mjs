@@ -14,6 +14,10 @@ async function load(relativePath, authUrl) {
   let source = readFileSync(new URL(relativePath, import.meta.url), "utf8");
   source = source.replace(/import \{ cookies \} from "next\/headers";/g, "const cookies = async () => ({ get: name => { const value = globalThis.__dropseoTestCookies.get(name); return value ? { value } : undefined; } });");
   source = source.replace(/from "jose"/g, `from ${JSON.stringify(joseUrl)}`).replace(/from "next\/server"/g, `from ${JSON.stringify(nextServerUrl)}`);
+  if (source.includes("@/lib/investigation-intent")) {
+    const intent = await load("../lib/investigation-intent.ts");
+    source = source.replaceAll('"@/lib/investigation-intent"', JSON.stringify(intent.url));
+  }
   if (authUrl) source = source.replace(/from "@\/lib\/auth"/g, `from ${JSON.stringify(authUrl)}`);
   const js = transpileModule(source, { compilerOptions: { module: ModuleKind.ESNext, target: ScriptTarget.ES2022 } }).outputText;
   const url = `data:text/javascript;base64,${Buffer.from(js).toString("base64")}`;
@@ -73,7 +77,7 @@ test("Google authentication safeguards and complete callback", async (t) => {
       cookieValues.clear();
     });
     await t.test("authorization starts with identity-only scopes, PKCE, and HttpOnly state", async () => {
-      const response = await start.GET(new Request("http://localhost:3000/api/auth/google"));
+      const response = await start.GET(new Request("http://localhost:3000/api/auth/google?url=https%3A%2F%2Fexample.com%2Fpricing&workflow=journey&goal=Find+a+plan"));
       const location = new URL(response.headers.get("location"));
       assert.equal(location.origin, "https://accounts.google.com");
       assert.equal(location.searchParams.get("scope"), "openid email profile");
@@ -83,6 +87,7 @@ test("Google authentication safeguards and complete callback", async (t) => {
       assert.match(response.headers.get("set-cookie"), /SameSite=lax/i);
       cookieValues.set(auth.FLOW_COOKIE, response.cookies.get(auth.FLOW_COOKIE).value);
       const flow = await auth.readAuthToken(cookieValues.get(auth.FLOW_COOKIE), "oauth");
+      assert.equal(new URL(flow.returnTo, "http://localhost:3000").searchParams.get("goal"), "Find a plan");
       assert.equal(flow.state, location.searchParams.get("state"));
       const digest = Buffer.from(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(flow.verifier))).toString("base64url");
       assert.equal(digest, location.searchParams.get("code_challenge"));
@@ -97,7 +102,8 @@ test("Google authentication safeguards and complete callback", async (t) => {
     const flow = await auth.readAuthToken(cookieValues.get(auth.FLOW_COOKIE), "oauth");
     await t.test("Google cancellation returns a retry state", async () => {
       const response = await callback.GET(new Request(`http://localhost:3000/api/auth/google/callback?error=access_denied&state=${flow.state}`));
-      assert.match(response.headers.get("location"), /error=cancelled$/);
+      assert.equal(new URL(response.headers.get("location")).searchParams.get("error"), "cancelled");
+      assert.equal(new URL(response.headers.get("location")).searchParams.get("url"), "https://example.com/pricing");
     });
     const { privateKey, publicKey } = await generateKeyPair("RS256");
     const jwk = await exportJWK(publicKey);
@@ -115,7 +121,9 @@ test("Google authentication safeguards and complete callback", async (t) => {
     const callbackRequest = () => new Request(`http://localhost:3000/api/auth/google/callback?code=test-code&state=${flow.state}`);
     await t.test("verified Google identity renders the workspace via a signed session", async () => {
       const response = await callback.GET(callbackRequest());
-      assert.equal(response.headers.get("location"), "http://localhost:3000/dashboard");
+      assert.equal(new URL(response.headers.get("location")).pathname, "/dashboard");
+      assert.equal(new URL(response.headers.get("location")).searchParams.get("url"), "https://example.com/pricing");
+      assert.equal(new URL(response.headers.get("location")).searchParams.get("goal"), "Find a plan");
       const session = response.cookies.get(auth.SESSION_COOKIE);
       assert.ok(session);
       cookieValues.set(auth.SESSION_COOKIE, session.value);
@@ -124,10 +132,10 @@ test("Google authentication safeguards and complete callback", async (t) => {
     });
     await t.test("callback rejects a different nonce and unverified email", async () => {
       nonce = "wrong-nonce";
-      assert.match((await callback.GET(callbackRequest())).headers.get("location"), /error=failed$/);
+      assert.equal(new URL((await callback.GET(callbackRequest())).headers.get("location")).searchParams.get("error"), "failed");
       nonce = flow.nonce;
       verifiedEmail = false;
-      assert.match((await callback.GET(callbackRequest())).headers.get("location"), /error=failed$/);
+      assert.equal(new URL((await callback.GET(callbackRequest())).headers.get("location")).searchParams.get("error"), "failed");
     });
     await t.test("sign-out rejects cross-origin POST and clears cookies on same-origin POST", async () => {
       const bad = await logout.POST(new Request("http://localhost:3000/api/auth/logout", { method: "POST", headers: { origin: "https://attacker.example" } }));

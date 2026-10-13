@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { readInvestigationIntent } from "@/lib/investigation-intent";
 import { GoogleSignIn } from "@/components/google-signin";
+import { TrustLinks } from "@/components/trust-links";
 import { getSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -13,9 +15,11 @@ const messages: Record<string, { title: string; detail: string }> = {
   failed: { title: "We couldn’t complete sign-in", detail: "Google sign-in was interrupted. Please try again in a moment." },
 };
 
-export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+export default async function LoginPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   if (await getSession()) redirect("/dashboard");
-  const { error } = await searchParams;
+  const params = await searchParams;
+  const { error } = params;
+  const intent = readInvestigationIntent(new URLSearchParams(params));
   const message = error && Object.hasOwn(messages, error) ? messages[error] : { title: "Your workspace awaits", detail: "Sign in with Google to investigate a website, follow the agent, and review evidence-backed findings." };
-  return <main className="auth-page"><section className="auth-card"><Link className="brand" href="/"><span className="brand-mark" aria-hidden="true"><img src="/audifox-logo.png" alt="" width="40" height="40" /></span>AudiFox<span>.</span></Link><div role={error ? "alert" : undefined}><h1>{message.title}</h1><p>{message.detail}</p></div>{error !== "configuration" && <GoogleSignIn />}<Link className="back-link" href="/">Back to home</Link></section></main>;
+  return <main className="auth-page"><section className="auth-card"><Link className="brand" href="/"><span className="brand-mark" aria-hidden="true"><img src="/audifox-logo.png" alt="" width="40" height="40" /></span>AudiFox<span>.</span></Link><div role={error ? "alert" : undefined}><h1>{message.title}</h1><p>{message.detail}</p></div>{intent && <p>Continue investigating {intent.url} with your selected goal.</p>}{error !== "configuration" && <GoogleSignIn href={intent ? `/api/auth/google?${new URLSearchParams(intent)}` : undefined} />}<Link className="back-link" href="/">Back to home</Link><TrustLinks /></section></main>;
 }

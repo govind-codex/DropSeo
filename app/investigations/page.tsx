@@ -1,6 +1,8 @@
+import { formatInvestigationDate } from "@/lib/date-format";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowRight, Globe2, History } from "lucide-react";
+import { TrustLinks } from "@/components/trust-links";
 import { UserProfileMenu } from "@/components/ui/user-profile-menu";
 import { getSession } from "@/lib/auth";
 import { investigationSummary, listInvestigations } from "@/lib/investigations";
@@ -58,10 +60,10 @@ export default async function InvestigationsPage() {
                 <div>
                   <strong>{run.url}</strong>
                   <p>{String(run.outcome)}</p>
-                  <small>{new Date(run.createdAt).toLocaleString()} · {run.workflow}{run.referenceId ? " · Verification" : ""}</small>
+                  <small>{formatInvestigationDate(run.createdAt)} · {run.workflow}{run.referenceId ? " · Verification" : ""}</small>
                 </div>
                 <span className={`history-status ${run.status}`}>
-                  {run.status === "running" ? "In progress" : run.status === "error" ? "Interrupted" : "Completed"}
+                  {run.status === "queued" ? "Queued" : run.status === "running" ? "Running" : run.status === "failed" ? "Interrupted" : "Completed"}
                 </span>
                 <span>{run.findings} findings</span>
                 <ArrowRight aria-hidden="true" />
@@ -76,7 +78,7 @@ export default async function InvestigationsPage() {
             <Link className="run-button" href="/dashboard">Start investigating <ArrowRight /></Link>
           </section>
         )}
-      </main>
+      </main><footer className="agent-footer"><TrustLinks /></footer>
     </div>
   );
 }
