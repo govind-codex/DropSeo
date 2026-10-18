@@ -118,7 +118,7 @@ try {
   for (const batch of [[320,375],[390,430],[768,1440]]) await Promise.all(batch.map(inspectWidth));
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${origin}/investigations/${completed.id}`);
-  await page.getByText(`Open evidence for ${finding.title}`, { exact: true }).click();
+  await page.getByLabel(`Open evidence for ${finding.title}`, { exact: true }).click();
   await page.locator(`#finding-${finding.id} details[open]`).waitFor();
   assert.match(await page.locator(`#finding-${finding.id} details`).innerText(), /TEST FIXTURE evidence/);
   assert.equal(await page.locator(`#finding-${theory.id} button`).count(), 0);

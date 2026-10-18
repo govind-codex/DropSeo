@@ -1,0 +1,24 @@
+.grid:global(.findings-list) {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+  gap: 16px;
+}
+
+.grid > article:nth-child(4n + 1),
+.grid > article:nth-child(4n + 4) { grid-column: span 2; }
+.grid > article:only-child, .grid > :global(.no-findings) { grid-column: 1 / -1; }
+
+@media (min-width: 1101px) {
+  .grid > article:last-child:nth-child(odd) { grid-column: 1 / -1; }
+}
+
+@media (max-width: 1100px) {
+  .grid:global(.findings-list) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid > article:nth-child(n) { grid-column: auto; }
+  .grid > article:only-child { grid-column: 1 / -1; }
+}
+
+@media (max-width: 720px) {
+  .grid:global(.findings-list) { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+}
