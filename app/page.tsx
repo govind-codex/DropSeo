@@ -61,14 +61,14 @@ export default async function LandingPage() {
       ) : <Navbar />}
       <main id="main">
         <section className="landing-hero">
-          <LandingReveal className="hero-copy" onLoad>
+          <LandingReveal className="hero-copy" variant="hero" onLoad>
             <span className="landing-eyebrow"><Sparkles size={15} /> AI WEBSITE INVESTIGATOR</span>
             <HalftoneHeadline lines={["Website friction, handled.", "Save hours every week."]} />
             <p>AudiFox explores real visitor journeys, finds what gets in the way, and brings back clear evidence so you know exactly what to fix.</p>
             <InvestigationStart authenticated={Boolean(user)} />
             <div className="hero-benefits" aria-label="AudiFox benefits"><span><Check size={15} /> Evidence-backed</span><span><Check size={15} /> Safe by default</span><span><Check size={15} /> Built for any public site</span></div>
           </LandingReveal>
-          <LandingReveal className="product-stage" delay={0.12} onLoad>
+          <LandingReveal className="product-stage" variant="scale">
             <div className="stage-trust"><span><ShieldCheck size={15} /> Safe browsing</span><span>Read-only exploration</span><span>Evidence captured</span></div>
             <div className="product-preview" aria-label="Illustrative preview of an AudiFox investigation">
             <div className="preview-toolbar"><span><Bot size={17} /> Agent workspace</span><span className="preview-label">ILLUSTRATIVE PREVIEW</span></div>
@@ -89,7 +89,7 @@ export default async function LandingPage() {
             <LandingReveal delay={0.18}><article><span className="capability-icon"><ShieldCheck /></span><h3>Verify your fixes</h3><p>Revisit a reported problem and check that the behavior has improved.</p></article></LandingReveal>
           </div>
         </section>
-        <section className="sample-proof"><span className="landing-eyebrow">SEE THE OUTPUT</span><h2>Evidence you can turn into a fix.</h2><p>Explore a clearly labeled example with an affected URL, observed behaviour, supporting evidence and recommended next action.</p><Link className="text-cta" href="/sample-report">View sample report <ArrowRight size={18} /></Link></section>
+        <section className="sample-proof"><LandingReveal><span className="landing-eyebrow">SEE THE OUTPUT</span><h2>Evidence you can turn into a fix.</h2><p>Explore a clearly labeled example with an affected URL, observed behaviour, supporting evidence and recommended next action.</p><Link className="text-cta" href="/sample-report">View sample report <ArrowRight size={18} /></Link></LandingReveal></section>
         <Pricing
           plans={pricingPlans}
           authenticated={Boolean(user)}

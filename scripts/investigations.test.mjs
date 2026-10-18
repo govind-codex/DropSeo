@@ -32,7 +32,7 @@ test("persistent history, ownership, and repeated verification", async (t) => {
     if (globalThis.__historyFailure) return Response.json({ error: "The website returned HTTP 503. Try another public page." }, { status: 503 });
     return Response.json({ url, title: "Test website", score: 80, checks: globalThis.__historyChecks, ttfb: 30, load: 50, images: 1, scripts: 1, styles: 1, links: [] });
   }`);
-  const entitlementUrl = dataUrl(`export async function reserveInvestigation() { return globalThis.__planAllowance || { allowed: true, usage: { plan: "free", planName: "Free", status: "free", used: 1, limit: 3, remaining: 2, maxPages: 4, period: "2026-10", resetsAt: "2026-11-01T00:00:00.000Z" } }; } export async function releaseInvestigation() {}`);
+  const entitlementUrl = dataUrl(`export async function reserveInvestigation() { return globalThis.__planAllowance || { allowed: true, usage: { plan: "free", planName: "Free", status: "free", used: 1, limit: 3, remaining: 2, maxPages: 4, period: "2026-10", resetsAt: "2026-11-01T00:00:00.000Z" } }; } export async function releaseInvestigation() { globalThis.__historyReleased = (globalThis.__historyReleased || 0) + 1; }`);
   const intent = await load("../lib/investigation-intent.ts");
   const presentation = await load("../lib/finding-presentation.ts");
   const replacements = { "next/server": dataUrl("export function after(task) { task(); }"), "@/lib/investigation-intent": intent.url, "@/lib/finding-presentation": presentation.url, "@/lib/auth": authUrl, "@/lib/investigations": store.url, "@/lib/investigation-comparison": comparison.url, "@/lib/website-analysis": analyzerUrl, "@/lib/plan-entitlements": entitlementUrl };
@@ -168,6 +168,38 @@ test("persistent history, ownership, and repeated verification", async (t) => {
       assert.equal(recovered.status, "failed");
       assert.match(recovered.error, /execution window/);
       assert.deepEqual(recovered.events.slice(0, -1), original.events);
+    });
+    await t.test("worker hosting and authentication failures are readable, saved and refunded", async () => {
+      const previousFetch = globalThis.fetch;
+      const previousWorker = process.env.AGENT_WORKER_URL;
+      const previousMode = process.env.AGENT_BROWSER_MODE;
+      process.env.AGENT_WORKER_URL = "https://worker.test";
+      delete process.env.AGENT_BROWSER_MODE;
+      try {
+        for (const status of [404, 401, 503]) {
+          const released = globalThis.__historyReleased || 0;
+          globalThis.fetch = async () => Response.json({ message: "Application not found", request_id: "PRIVATE_PROVIDER_DETAIL" }, { status });
+          const response = await post({ url: "https://example.com/" });
+          assert.equal(response.status, 502);
+          const body = await response.json();
+          assert.match(body.error, /browser investigation service/);
+          assert.ok(!body.error.includes("PRIVATE_PROVIDER_DETAIL"));
+          assert.equal(body.code, status === 404 ? "WORKER_NOT_FOUND" : "WORKER_START_REJECTED");
+          assert.equal(globalThis.__historyReleased, released + 1);
+          const records = await store.module.listInvestigations("alice");
+          assert.ok(records.some(record => record.status === "failed" && record.error === body.error));
+        }
+        const released = globalThis.__historyReleased;
+        globalThis.fetch = async () => { throw new TypeError("fetch failed"); };
+        const response = await post({ url: "https://example.com/" });
+        assert.equal(response.status, 502);
+        assert.equal((await response.json()).code, "WORKER_UNREACHABLE");
+        assert.equal(globalThis.__historyReleased, released + 1);
+      } finally {
+        globalThis.fetch = previousFetch;
+        if (previousWorker === undefined) delete process.env.AGENT_WORKER_URL; else process.env.AGENT_WORKER_URL = previousWorker;
+        if (previousMode === undefined) delete process.env.AGENT_BROWSER_MODE; else process.env.AGENT_BROWSER_MODE = previousMode;
+      }
     });
     await t.test("worker queue and running events persist genuine lifecycle transitions", async () => {
       const previousFetch = globalThis.fetch;

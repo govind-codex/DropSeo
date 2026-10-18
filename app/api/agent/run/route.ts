@@ -58,6 +58,17 @@ export function GET() {
   });
 }
 
+class WorkerStartError extends Error {
+  constructor(message: string, readonly code: string) { super(message); }
+}
+
+function rejectedWorkerMessage(status: number) {
+  if (status === 404) return "The browser investigation service could not be found. Please contact support so we can reconnect it.";
+  if (status === 401 || status === 403) return "The browser investigation service could not authenticate. Please contact support so we can restore access.";
+  if (status === 429 || status === 503) return "The browser investigation service is temporarily unavailable. Please try again later.";
+  return "The browser investigation service could not start this run. Please try again later or contact support.";
+}
+
 export async function POST(request: Request) {
   const user = await getSession();
   if (!user) return Response.json({ error: "Sign in with Google to start an investigation." }, { status: 401 });
@@ -114,8 +125,13 @@ export async function POST(request: Request) {
 
     if (useExternalBrowser && workerUrl) {
       const token = process.env.AGENT_WORKER_TOKEN || (process.env.NODE_ENV !== "production" ? "sitepulse_worker_secret_token_1a2b3c4d5e" : undefined);
-      if (!token) throw new Error("The browser worker requires a shared authentication token.");
-      const upstream = await fetch(new URL("/run", workerUrl), {
+      if (!token) throw new WorkerStartError("The browser investigation service is not configured. Please contact support.", "WORKER_CONFIGURATION_ERROR");
+      let runUrl: URL;
+      try {
+        runUrl = new URL("/run", workerUrl);
+        if (!["https:", "http:"].includes(runUrl.protocol) || runUrl.username || runUrl.password) throw new Error();
+      } catch { throw new WorkerStartError("The browser investigation service is not configured correctly. Please contact support.", "WORKER_CONFIGURATION_ERROR"); }
+      const upstream = await fetch(runUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -123,14 +139,17 @@ export async function POST(request: Request) {
         },
         body: JSON.stringify({ ...input, ownerId: user.id, baselineResult: reference?.result }),
         signal: AbortSignal.timeout(240_000),
-      });
+        redirect: "error",
+      }).catch(() => { throw new WorkerStartError("The browser investigation service could not be reached. Please try again later or contact support.", "WORKER_UNREACHABLE"); });
 
       if (!upstream.ok || !upstream.body) {
-        const message = await upstream.text();
-        record.status = "failed"; record.error = message || "Browser worker unavailable."; await saveInvestigation(record);
+        // Hosting-provider JSON/HTML is infrastructure detail, not a visitor error.
+        await upstream.body?.cancel();
+        const message = rejectedWorkerMessage(upstream.status);
+        record.status = "failed"; record.error = message; await saveInvestigation(record);
         await releaseInvestigation(user.id, allowance.usage.period);
         reservation = undefined;
-        return Response.json({ error: message || "The browser worker could not start this run." }, { status: upstream.status || 502 });
+        return Response.json({ error: message, code: upstream.status === 404 ? "WORKER_NOT_FOUND" : "WORKER_START_REJECTED" }, { status: 502 });
       }
       streamStarted = true;
       return persistStream(upstream, record, reference);
@@ -141,7 +160,7 @@ export async function POST(request: Request) {
   } catch (error) {
     if (reservation && !streamStarted) await releaseInvestigation(user.id, reservation.period).catch(() => undefined);
     if (pendingRecord) { pendingRecord.status = "failed"; pendingRecord.error = error instanceof Error ? error.message : "Unable to start investigation."; await saveInvestigation(pendingRecord).catch(() => {}); }
-    return Response.json({ error: error instanceof Error ? error.message : "Unable to start the website analysis." }, { status: 400 });
+    return Response.json({ error: error instanceof Error ? error.message : "Unable to start the website analysis.", ...(error instanceof WorkerStartError ? { code: error.code } : {}) }, { status: error instanceof WorkerStartError ? 502 : 400 });
   }
 }
 

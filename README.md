@@ -67,3 +67,16 @@ See [the launch review checklist](docs/launch-review.md) for test evidence, isol
 Report exports embed Noto Sans, distributed under its [Open Font License](public/fonts/OFL.txt).
 
 Built with Next.js, React, Gemini, Playwright, WebCMD, MongoDB/D1, and Dodo Payments. Requires Node.js 22.17+.
+
+## Browser worker deployment troubleshooting
+
+A 404 response containing "Application not found" during a browser run is an upstream-service error. Check the worker deployment and the public origin configured as `AGENT_WORKER_URL` in Vercel's Production environment. Use the browser worker service domain, not the frontend, hosting dashboard or an old domain.
+
+1. Confirm the worker deployment is running and its public domain routes to that service. Its target port must match the supplied `PORT`; the server already listens on `0.0.0.0` and reads `PORT`.
+2. Check `https://YOUR-WORKER-DOMAIN/health`. Expect HTTP 200 with `ok: true` and `browser: true`. A platform 404 requires correcting the service routing/deployment. HTTP 503 from this endpoint means Chromium is not ready; inspect worker logs.
+3. Set Vercel's `AGENT_WORKER_URL` to that public origin and `AGENT_BROWSER_MODE=integrated`. The worker and frontend must use the same `AGENT_WORKER_TOKEN`. Never share the token in support messages. Worker 401/403 errors indicate an authentication/configuration issue.
+4. Redeploy Vercel after updating production variables, then verify a controlled investigation and its saved report. The 300-second limit in `vercel.json` cannot repair a missing worker service.
+
+Explicitly choosing `AGENT_BROWSER_MODE=portable` bypasses the worker and provides document analysis without browser screenshots or journey replay. This is a deliberate mode choice, not automatic failover. Saved browser reports still require their original engine for verification.
+
+Upstream rejection and connection failures return a readable service error, save the failed start and release its reserved allowance. Accepted runs that later fail retain the existing allowance policy.

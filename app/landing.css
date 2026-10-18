@@ -164,3 +164,9 @@
 @media(min-width:1600px){.landscape-footer{min-height:650px;padding-top:270px}}
 @media(max-width:1000px){.landscape-footer{padding:200px 30px 25px;gap:140px}.landscape-footer-content{gap:35px}.landscape-footer-links{gap:18px}.landscape-footer-brand{flex-basis:230px}}
 @media(max-width:720px){.landscape-footer{min-height:750px;padding:160px 24px 24px;background-size:auto 1100px;background-position:center calc(100% + 65px);gap:180px}.landscape-footer:before{background:linear-gradient(180deg,transparent 10%,#132e1b7a 24%,#132e1b8a 55%,#142f1b52 100%)}.landscape-footer-content{flex-direction:column;gap:32px}.landscape-footer-brand{flex:auto}.landscape-footer-links{width:100%;flex:auto;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px 24px}.landscape-footer-links h2{margin-bottom:10px}.landscape-footer-links ul{gap:10px}.landscape-footer-bottom{flex-direction:column;align-items:center;text-align:center;gap:4px}.landscape-footer-brand p{margin:12px 0}.landscape-footer .brand{font-size:25px}}
+/* One entrance flourish, then a still surface for reading and interaction. */
+.landing-hero:before{animation:hero-atmosphere 1.8s cubic-bezier(.22,1,.36,1) both}
+@keyframes hero-atmosphere{from{opacity:0;transform:translateX(-50%) scale(.88)}to{opacity:1;transform:translateX(-50%) scale(1)}}
+.hero-copy>.landing-eyebrow svg{animation:hero-sparkle 1.1s .15s cubic-bezier(.22,1,.36,1) backwards}
+@keyframes hero-sparkle{from{transform:rotate(-40deg) scale(.65)}to{transform:rotate(0) scale(1)}}
+@media(prefers-reduced-motion:reduce){.landing-hero:before,.hero-copy>.landing-eyebrow svg{animation:none!important}}

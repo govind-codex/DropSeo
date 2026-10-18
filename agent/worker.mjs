@@ -5,6 +5,7 @@ import os from "node:os";
 import { ownerContext, ownerMemoryDirectory } from "./owner-context.mjs";
 import { randomUUID } from "node:crypto";
 import { chromium } from "playwright-core";
+import { navigatePage } from "./navigation.mjs";
 import { assessGoalCompletion, assessVerification } from "./evaluation.mjs";
 import {
   exploreWebsite,
@@ -88,7 +89,10 @@ function browserSessionClosed(error, page) {
 }
 
 function safePageUrl(page, fallback) {
-  try { return page.isClosed() ? fallback : page.url(); }
+  try {
+    const url = page.isClosed() ? fallback : page.url();
+    return /^https?:/.test(url) ? url : fallback;
+  }
   catch { return fallback; }
 }
 export async function browserAvailable() {
@@ -389,7 +393,7 @@ Choose exactly one useful action. Use only an elementId present in the current o
   try { return await askGemini(prompt, decisionSchema); } catch { return fallbackDecision(observation, history, workflow, goal); }
 }
 
-async function executeDecision(page, decision, observation, origin) {
+async function executeDecision(page, decision, observation, origin, onNavigationWarning) {
   const beforeUrl = page.url();
   const beforeText = observation.text.slice(0, 1200);
   if (decision.action === "finish") return { ok: true, changed: false, message: decision.outcome || "Investigation complete." };
@@ -404,7 +408,7 @@ async function executeDecision(page, decision, observation, origin) {
   }
   if (decision.action === "navigate") {
     if (!decision.url || !allowedNavigation(decision.url, origin)) return { ok: false, changed: false, message: "Navigation was blocked by the domain policy." };
-    await page.goto(new URL(decision.url, origin).href, { waitUntil: "domcontentloaded", timeout: 15_000 });
+    await navigatePage(page, new URL(decision.url, origin).href, { onWarning: onNavigationWarning });
     return { ok: true, changed: true, message: `Navigated to ${page.url()}.` };
   }
   const element = observation.elements.find((item) => item.id === decision.elementId);
@@ -480,6 +484,11 @@ async function runOwnedAgent(input, res) {
   const consoleEvidence = [];
   const history = [];
   const visited = new Set();
+  const navigationWarnings = [];
+  const onNavigationWarning = (warning) => {
+    navigationWarnings.push(warning);
+    emit(res, { type: "activity", status: "warning", title: "Website loading slowly", detail: warning.message });
+  };
   const startedAt = Date.now();
   let profile;
   let observation;
@@ -502,7 +511,7 @@ async function runOwnedAgent(input, res) {
   try {
     await installMeasurements(page);
     emit(res, { type: "activity", status: "running", title: "Opening website", detail: target.href });
-    await page.goto(target.href, { waitUntil: "domcontentloaded", timeout: 20_000 });
+    await navigatePage(page, target.href, { onWarning: onNavigationWarning });
     visited.add(page.url());
     observation = await observePage(page, `sp-${runId.slice(0, 6)}-0`);
     performance = await collectPerformance(page);
@@ -560,9 +569,9 @@ async function runOwnedAgent(input, res) {
       const plannedElement = observation.elements.find((item) => item.id === decision.elementId);
       let result;
       try {
-        result = await executeDecision(page, decision, observation, target.origin);
+        result = await executeDecision(page, decision, observation, target.origin, onNavigationWarning);
       } catch (error) {
-        result = { ok: false, changed: false, sessionClosed: browserSessionClosed(error, page), message: error instanceof Error ? error.message : "The action failed." };
+        result = { ok: false, changed: false, sessionClosed: browserSessionClosed(error, page), navigationFailed: decision.action === "navigate", message: error instanceof Error ? error.message : "The action failed." };
       }
       const currentUrl = safePageUrl(page, observation.url || target.href);
       history.push({ sequence: index + 1, action: decision.action, rationale: decision.rationale, elementText: result.elementText || "", target: plannedElement?.target, value: decision.action === "type" ? decision.text : undefined, url: currentUrl, ...result });
@@ -570,10 +579,10 @@ async function runOwnedAgent(input, res) {
       if (!result.ok && !result.blocked) emit(res, { type: "activity", status: "running", title: "Recovering from unexpected state", detail: "Refreshing the page model and looking for another route." });
       if (result.blocked) finalOutcome = "The agent safely stopped before a consequential action.";
       visited.add(currentUrl);
-      if (result.sessionClosed) {
+      if (result.sessionClosed || result.navigationFailed) {
         pageSessionEnded = true;
-        finalOutcome = "The browser session ended after evidence was collected; the available evidence was preserved and analyzed.";
-        emit(res, { type: "activity", status: "warning", title: "Browser session ended early", detail: "Continuing with the evidence already collected instead of interrupting the report." });
+        finalOutcome = "The browser could not continue after evidence was collected; the available evidence was preserved and analyzed.";
+        emit(res, { type: "activity", status: "warning", title: result.navigationFailed ? "Website navigation unavailable" : "Browser session ended early", detail: "Continuing with the evidence already collected instead of interrupting the report." });
         break;
       }
       try {
@@ -662,8 +671,8 @@ async function runOwnedAgent(input, res) {
     });
     const checkedFindings = baseFindings(observation, performance, networkFailures, consoleErrors);
     const checkNames = ["Page title is missing", "Meta description is missing", "Meta description length is suboptimal", "Page title length is suboptimal", "Canonical URL is missing", "Page is excluded from search indexing", "Main heading structure is unclear", "Document language is missing", "Interactive controls have no accessible name", "Images are missing alt attributes", "Form controls lack accessible labels", "Largest content appears late", "Layout shifts exceed the recommended threshold", "Server response is slow", "Page transfer size is heavy", "An image is substantially oversized", "High script count may delay interaction"];
-    const checkEvidence = pageSessionEnded ? [] : [{ url: observation.url, checks: checkNames.filter((name) => !["Largest content appears late", "Layout shifts exceed the recommended threshold"].includes(name) || performance.vitals.lcp > 0).map((name) => ({ name, pass: !checkedFindings.some((finding) => finding.title === name) })) }];
-    const result = { savedWorkflow: learnedWorkflow || knownWorkflow || undefined, checkEvidence, runId, workflow, goal, status: "completed", completedAt: new Date().toISOString(), profile, outcome: finalOutcome, diagnosis, visitedPages: [...visited], actions: history, goalEvaluation: workflow === "journey" ? goalEvaluation : undefined, verification: verification || undefined, performance, auditSnapshot: { titlePresent: Boolean(observation.title), metaDescriptionPresent: Boolean(observation.description), canonicalPresent: Boolean(observation.canonical), h1Count: observation.headings.filter((item) => item.level === "H1").length }, regressions: { workflow: regressionDetected, metrics: metricRegressions.map((item) => ({ metric: item.metric, previous: item.previous, current: item.current })) }, findings, browserIntelligence: { webcmd: webcmdInfo, mode: webcmdExecution?.passed ? "reused" : webcmdExploration ? "explored" : "playwright-fallback", workflow: learnedWorkflow ? { id: learnedWorkflow.id, name: learnedWorkflow.name, status: learnedWorkflow.status, successRate: learnedWorkflow.successRate, steps: learnedWorkflow.steps.length } : null, regressionDetected: regressionDetected || metricRegressions.length > 0, partialEvidence: pageSessionEnded }, safety: { blockedActions: history.filter((item) => item.blocked).length, domainRestricted: true, sensitiveFieldsProtected: true, consequentialActionsProhibited: true }, durationMs: Date.now() - startedAt };
+    const checkEvidence = pageSessionEnded || navigationWarnings.some((warning) => warning.partialLoad && warning.url === observation.url) ? [] : [{ url: observation.url, checks: checkNames.filter((name) => !["Largest content appears late", "Layout shifts exceed the recommended threshold"].includes(name) || performance.vitals.lcp > 0).map((name) => ({ name, pass: !checkedFindings.some((finding) => finding.title === name) })) }];
+    const result = { savedWorkflow: learnedWorkflow || knownWorkflow || undefined, checkEvidence, runId, workflow, goal, status: "completed", completedAt: new Date().toISOString(), profile, outcome: finalOutcome, diagnosis, visitedPages: [...visited], actions: history, goalEvaluation: workflow === "journey" ? goalEvaluation : undefined, verification: verification || undefined, performance, auditSnapshot: { titlePresent: Boolean(observation.title), metaDescriptionPresent: Boolean(observation.description), canonicalPresent: Boolean(observation.canonical), h1Count: observation.headings.filter((item) => item.level === "H1").length }, regressions: { workflow: regressionDetected, metrics: metricRegressions.map((item) => ({ metric: item.metric, previous: item.previous, current: item.current })) }, findings, browserIntelligence: { webcmd: webcmdInfo, mode: webcmdExecution?.passed ? "reused" : webcmdExploration ? "explored" : "playwright-fallback", workflow: learnedWorkflow ? { id: learnedWorkflow.id, name: learnedWorkflow.name, status: learnedWorkflow.status, successRate: learnedWorkflow.successRate, steps: learnedWorkflow.steps.length } : null, regressionDetected: regressionDetected || metricRegressions.length > 0, partialEvidence: pageSessionEnded || navigationWarnings.some((warning) => warning.partialLoad), navigationWarnings }, safety: { blockedActions: history.filter((item) => item.blocked).length, domainRestricted: true, sensitiveFieldsProtected: true, consequentialActionsProhibited: true }, durationMs: Date.now() - startedAt };
     await fs.mkdir(runOutputDirectory(), { recursive: true });
     await fs.writeFile(path.join(runOutputDirectory(), `${runId}.json`), JSON.stringify(result, null, 2));
     emit(res, { type: "complete", result });

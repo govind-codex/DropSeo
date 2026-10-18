@@ -1,5 +1,6 @@
 "use client"
 
+import { LandingReveal } from "@/components/landing-reveal"
 import NumberFlow from "@number-flow/react"
 import { motion, useReducedMotion } from "framer-motion"
 import { Check, Star } from "lucide-react"
@@ -45,7 +46,7 @@ export function Pricing({
       className="scroll-mt-5 overflow-hidden bg-[radial-gradient(circle_at_12%_0,#126c5b_0,transparent_30%),linear-gradient(145deg,#073d34,#052d27)] px-5 py-16 text-white sm:px-10 sm:py-20"
     >
       <div className="mx-auto max-w-6xl">
-        <div className="mx-auto mb-10 max-w-3xl space-y-4 text-center">
+        <LandingReveal className="mx-auto mb-10 max-w-3xl space-y-4 text-center">
           <span className="text-xs font-bold tracking-[0.18em] text-[#84dfbd]">
             FLEXIBLE PLANS. CLEAR LIMITS.
           </span>
@@ -55,12 +56,12 @@ export function Pricing({
           <p className="whitespace-pre-line text-base leading-7 text-[#c5e0d7] sm:text-lg">
             {description}
           </p>
-        </div>
+        </LandingReveal>
 
         <div className="grid grid-cols-1 items-stretch gap-5 md:grid-cols-3">
           {plans.map((plan, index) => (
+            <LandingReveal key={plan.id} delay={index * 0.09} className="h-full">
             <motion.article
-              key={plan.id}
               initial={false}
               whileInView={{
                 y: isDesktop && plan.isPopular ? -14 : 0,
@@ -68,9 +69,9 @@ export function Pricing({
                 scale: isDesktop && !plan.isPopular ? 0.97 : 1,
               }}
               viewport={{ once: true, amount: 0.25 }}
-              transition={{ duration: 0.55, delay: prefersReducedMotion ? 0 : index * 0.08, ease: [0.22, 1, 0.36, 1] }}
+              transition={{ duration: prefersReducedMotion ? 0 : 0.55, delay: prefersReducedMotion ? 0 : index * 0.08, ease: [0.22, 1, 0.36, 1] }}
               className={cn(
-                "relative flex min-w-0 flex-col rounded-2xl border bg-white p-6 text-left text-[#163d34] shadow-[0_18px_50px_#001b1626] sm:p-7",
+                "relative flex h-full min-w-0 flex-col rounded-2xl border bg-white p-6 text-left text-[#163d34] shadow-[0_18px_50px_#001b1626] sm:p-7",
                 plan.isPopular ? "border-2 border-[#62d3aa] shadow-[0_24px_60px_#001b1640]" : "border-[#d6e8e1]"
               )}
             >
@@ -125,6 +126,7 @@ export function Pricing({
                 )}
               </div>
             </motion.article>
+            </LandingReveal>
           ))}
         </div>
 
