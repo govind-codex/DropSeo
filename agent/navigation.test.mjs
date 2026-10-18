@@ -17,6 +17,11 @@ test("navigation handles slow and unreachable documents in Chromium", async (t) 
     if (req.url === "/never" || req.url === "/stalled.js") return;
     if (req.url === "/retry" && ++retryRequests === 1) return;
     res.setHeader("Content-Type", "text/html");
+    if (req.url === "/csp") res.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self'; require-trusted-types-for 'script'");
+    if (req.url === "/delayed") return res.end('<body><script>window.requestAnimationFrame = () => 0; setTimeout(() => document.body.append(Object.assign(document.createElement("h1"), {textContent: "Content rendered later"})), 350);</script></body>');
+    if (req.url === "/late") return res.end('<body><script>setTimeout(() => document.body.append(Object.assign(document.createElement("h1"), {textContent: "Hydrated content"})), 5500);</script></body>');
+    if (req.url === "/denied") { res.statusCode = 403; return res.end(" "); }
+    if (req.url === "/limited") { res.statusCode = 429; return res.end(" "); }
     if (req.url === "/slow") return res.end('<h1>Usable content</h1><script src="/stalled.js"></script>');
     if (req.url === "/blank") return res.end("<html><body></body></html>");
     if (req.url === "/error") res.statusCode = 503;
@@ -39,6 +44,22 @@ test("navigation handles slow and unreachable documents in Chromium", async (t) 
     assert.equal(result.partialLoad, false);
     assert.equal(result.response.status(), 200);
     assert.deepEqual(warnings, []);
+  }));
+  await t.test("strict content security policies do not hide readable content", () => withPage(async (page) => {
+    await navigatePage(page, `${origin}/csp`, options);
+    assert.equal(await page.locator("h1").innerText(), "Current document");
+  }));
+  await t.test("delayed content is detected even when animation frames stop", () => withPage(async (page) => {
+    await navigatePage(page, `${origin}/delayed`, { ...options, contentTimeoutMs: 1_000 });
+    assert.equal(await page.locator("h1").innerText(), "Content rendered later");
+  }));
+  await t.test("default content budget allows hydration beyond five seconds", () => withPage(async (page) => {
+    await navigatePage(page, `${origin}/late`);
+    assert.equal(await page.locator("h1").innerText(), "Hydrated content");
+  }));
+  await t.test("access refusals identify the HTTP status instead of reporting blank content", () => withPage(async (page) => {
+    await assert.rejects(navigatePage(page, `${origin}/denied`, options), /refused access.*HTTP 403/);
+    await assert.rejects(navigatePage(page, `${origin}/limited`, options), /rate-limiting.*HTTP 429/);
   }));
   await t.test("blocked DOMContentLoaded continues only with readable content", () => withPage(async (page) => {
     await assert.rejects(page.goto(`${origin}/slow`, { waitUntil: "domcontentloaded", timeout: 800 }), { name: "TimeoutError" });

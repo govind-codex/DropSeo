@@ -7,7 +7,7 @@ function timedOut(error) {
 export async function navigatePage(page, url, {
   responseTimeoutMs = 25_000,
   domTimeoutMs = 10_000,
-  contentTimeoutMs = 5_000,
+  contentTimeoutMs = 15_000,
   onWarning = () => {},
 } = {}) {
   let response;
@@ -29,6 +29,13 @@ export async function navigatePage(page, url, {
     }
   }
 
+  const status = response?.status();
+  const host = new URL(url).hostname;
+  if ([401, 403, 429].includes(status)) {
+    const reason = status === 401 ? "requires authentication" : status === 403 ? "refused access to the browser worker" : "is rate-limiting requests";
+    throw new Error(`The target website (${host}) ${reason} (HTTP ${status}). The investigation cannot continue from this worker. Try a publicly accessible page${status === 429 ? " or wait before trying again" : ""}.`);
+  }
+
   let partialLoad = false;
   try {
     await page.waitForLoadState("domcontentloaded", { timeout: domTimeoutMs });
@@ -39,10 +46,12 @@ export async function navigatePage(page, url, {
 
   // Never accept a blank document as successful evidence, even after a response.
   try {
-    await page.waitForFunction(() => Boolean(document.body?.innerText.trim()), null, { timeout: contentTimeoutMs });
+    // The default requestAnimationFrame polling can stall on background pages
+    // or sites that replace animation callbacks, even after content appears.
+    await page.waitForFunction(() => Boolean(document.body?.innerText.trim()), null, { timeout: contentTimeoutMs, polling: 100 });
   } catch (error) {
     if (!timedOut(error) || page.isClosed()) throw error;
-    throw new Error(`The target website (${new URL(url).hostname}) responded but did not display readable page content. It may still be loading or restricting automated access. Try again later or investigate another public page.`, { cause: error });
+    throw new Error(`The target website (${host}) responded${status ? ` with HTTP ${status}` : ""} but did not display readable page content within ${contentTimeoutMs / 1000} seconds. It may still be loading or restricting automated access. Try again later or investigate another public page.`, { cause: error });
   }
 
   if (partialLoad) onWarning({ url: page.url(), partialLoad: true, message: "The page is still loading. Continuing with the readable content already available; load-dependent checks may be incomplete." });
