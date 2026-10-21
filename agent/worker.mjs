@@ -6,6 +6,7 @@ import { ownerContext, ownerMemoryDirectory } from "./owner-context.mjs";
 import { randomUUID } from "node:crypto";
 import { chromium } from "playwright-core";
 import { navigatePage } from "./navigation.mjs";
+import { capturePageEvidence } from "./page-evidence.mjs";
 import { assessGoalCompletion, assessVerification } from "./evaluation.mjs";
 import {
   exploreWebsite,
@@ -434,12 +435,14 @@ async function executeDecision(page, decision, observation, origin, onNavigation
 }
 
 async function screenshotEvent(page, runId, label) {
-  const buffer = await page.screenshot({ type: "jpeg", quality: 55, fullPage: false });
+  const capture = await capturePageEvidence(page);
+  if (!capture) return { type: "activity", status: "warning", title: "Screenshot deferred", detail: "The page stayed blank or on a loading screen. Keeping the last readable screenshot." };
+  const { buffer, url } = capture;
   const directory = runOutputDirectory(runId);
   await fs.mkdir(directory, { recursive: true });
   const filename = `${String(Date.now())}-${label}.jpg`;
   await fs.writeFile(path.join(directory, filename), buffer);
-  return { type: "snapshot", id: randomUUID(), label, url: page.url(), image: `data:image/jpeg;base64,${buffer.toString("base64")}` };
+  return { type: "snapshot", id: randomUUID(), label, url, image: `data:image/jpeg;base64,${buffer.toString("base64")}` };
 }
 
 async function webcmdScreenshotEvent(base64, runId, label, url) {
@@ -587,7 +590,7 @@ async function runOwnedAgent(input, res) {
       }
       try {
         observation = await observePage(page, `sp-${runId.slice(0, 6)}-${index + 1}`);
-        if (index === 1 || !result.ok) emit(res, await screenshotEvent(page, runId, `step-${index + 1}`));
+        emit(res, await screenshotEvent(page, runId, `step-${index + 1}`));
       } catch (error) {
         if (!browserSessionClosed(error, page)) throw error;
         pageSessionEnded = true;

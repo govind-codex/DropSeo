@@ -1,3 +1,5 @@
+import { readablePageState } from "./page-evidence.mjs";
+
 function timedOut(error) {
   return error?.name === "TimeoutError";
 }
@@ -62,12 +64,7 @@ async function navigateOnce(page, url, {
   try {
     // The default requestAnimationFrame polling can stall on background pages
     // or sites that replace animation callbacks, even after content appears.
-    await page.waitForFunction(() => {
-      const text = document.body?.innerText.trim() || "";
-      // SPA shells can display several loading labels before hydration or an
-      // authentication redirect. Those labels are not usable audit evidence.
-      return Boolean(text) && !/^(?:(?:loading|please wait)[\s.\u2026!]*)+$/i.test(text);
-    }, null, { timeout: contentTimeoutMs, polling: 100 });
+    await page.waitForFunction(readablePageState, null, { timeout: contentTimeoutMs, polling: 100 });
   } catch (error) {
     if (!timedOut(error) || page.isClosed()) throw error;
     throw new PageContentTimeout(`The target website (${host}) responded${status ? ` with HTTP ${status}` : ""} but did not display readable page content within ${contentTimeoutMs / 1000} seconds on the final attempt. It may still be loading, have a script error, or restrict automated access. Try again later or investigate another public page.`, { cause: error });

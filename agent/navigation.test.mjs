@@ -4,6 +4,7 @@ import http from "node:http";
 import test from "node:test";
 import { chromium } from "playwright-core";
 import { navigatePage } from "./navigation.mjs";
+import { capturePageEvidence } from "./page-evidence.mjs";
 
 test("navigation handles slow and unreachable documents in Chromium", async (t) => {
   const candidates = [process.env.CHROME_EXECUTABLE_PATH, "C:/Program Files/Google/Chrome/Application/chrome.exe", "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe", "/usr/bin/chromium", "/usr/bin/google-chrome"].filter(Boolean);
@@ -25,6 +26,7 @@ test("navigation handles slow and unreachable documents in Chromium", async (t) 
     if (req.url === "/empty-once" && ++emptyRequests === 1) return res.end("<body></body>");
     if (req.url === "/loading") return res.end('<body>Loading...<div>Loading...</div></body>');
     if (req.url === "/hydrating") return res.end('<body>Loading...<script>setTimeout(() => document.body.innerHTML = "<h1>Sign in</h1>", 350);</script></body>');
+    if (req.url === "/redirecting") return res.end('<body>Loading...<script>setTimeout(() => location.href = "/ready", 150);</script></body>');
     if (req.url === "/denied") { res.statusCode = 403; return res.end(" "); }
     if (req.url === "/limited") { res.statusCode = 429; return res.end(" "); }
     if (req.url === "/slow") return res.end('<h1>Usable content</h1><script src="/stalled.js"></script>');
@@ -76,6 +78,31 @@ test("navigation handles slow and unreachable documents in Chromium", async (t) 
   }));
   await t.test("a persistent loading screen cannot become successful evidence", () => withPage(async (page) => {
     await assert.rejects(navigatePage(page, `${origin}/loading`, options), /did not display readable page content/);
+  }));
+  await t.test("screenshots wait for content after a loading shell", () => withPage(async (page) => {
+    await page.goto(`${origin}/hydrating`);
+    const capture = await capturePageEvidence(page, { timeoutMs: 2_000, stableMs: 150 });
+    assert.ok(capture?.buffer.length > 0);
+    assert.equal(capture.url, `${origin}/hydrating`);
+    assert.equal(await page.locator("h1").innerText(), "Sign in");
+  }));
+  await t.test("blank and persistent spinner pages do not produce screenshots", () => withPage(async (page) => {
+    await page.setContent('<body><div role="progressbar"></div></body>');
+    assert.equal(await capturePageEvidence(page, { timeoutMs: 300, stableMs: 100 }), null);
+    await page.goto(`${origin}/loading`);
+    assert.equal(await capturePageEvidence(page, { timeoutMs: 300, stableMs: 100 }), null);
+  }));
+  await t.test("screenshots wait for a busy page to finish rendering", () => withPage(async (page) => {
+    await page.setContent('<body style="margin:0"><main aria-busy="true" style="width:100vw;height:100vh"><h1>Dashboard</h1></main><script>setTimeout(() => document.querySelector("main").setAttribute("aria-busy", "false"), 350);</script></body>');
+    const capture = await capturePageEvidence(page, { timeoutMs: 2_000, stableMs: 150 });
+    assert.ok(capture?.buffer.length > 0);
+    assert.equal(await page.locator("main").getAttribute("aria-busy"), "false");
+  }));
+  await t.test("screenshots use the rendered URL after a client-side redirect", () => withPage(async (page) => {
+    await page.goto(`${origin}/redirecting`);
+    const capture = await capturePageEvidence(page, { timeoutMs: 2_000, stableMs: 150 });
+    assert.ok(capture?.buffer.length > 0);
+    assert.equal(capture.url, `${origin}/ready`);
   }));
   await t.test("access refusals identify the HTTP status instead of reporting blank content", () => withPage(async (page) => {
     await assert.rejects(navigatePage(page, `${origin}/denied`, options), /refused access.*HTTP 403/);
