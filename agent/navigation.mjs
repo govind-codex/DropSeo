@@ -2,12 +2,26 @@ function timedOut(error) {
   return error?.name === "TimeoutError";
 }
 
+class PageContentTimeout extends Error {}
+
+export async function navigatePage(page, url, options = {}) {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      return await navigateOnce(page, url, options);
+    } catch (error) {
+      if (!(error instanceof PageContentTimeout) || page.isClosed() || attempt === 1) throw error;
+      options.onWarning?.({ url: page.url(), message: "The website returned an empty page or stayed on its loading screen. Retrying the page once." });
+      await page.goto("about:blank", { waitUntil: "commit", timeout: 5_000 });
+    }
+  }
+}
+
 // Keep response arrival separate from DOM readiness: a slow script can hold
 // DOMContentLoaded open even when the visitor can already use the document.
-export async function navigatePage(page, url, {
+async function navigateOnce(page, url, {
   responseTimeoutMs = 25_000,
   domTimeoutMs = 10_000,
-  contentTimeoutMs = 15_000,
+  contentTimeoutMs = 30_000,
   onWarning = () => {},
 } = {}) {
   let response;
@@ -48,10 +62,15 @@ export async function navigatePage(page, url, {
   try {
     // The default requestAnimationFrame polling can stall on background pages
     // or sites that replace animation callbacks, even after content appears.
-    await page.waitForFunction(() => Boolean(document.body?.innerText.trim()), null, { timeout: contentTimeoutMs, polling: 100 });
+    await page.waitForFunction(() => {
+      const text = document.body?.innerText.trim() || "";
+      // SPA shells can display several loading labels before hydration or an
+      // authentication redirect. Those labels are not usable audit evidence.
+      return Boolean(text) && !/^(?:(?:loading|please wait)[\s.\u2026!]*)+$/i.test(text);
+    }, null, { timeout: contentTimeoutMs, polling: 100 });
   } catch (error) {
     if (!timedOut(error) || page.isClosed()) throw error;
-    throw new Error(`The target website (${host}) responded${status ? ` with HTTP ${status}` : ""} but did not display readable page content within ${contentTimeoutMs / 1000} seconds. It may still be loading or restricting automated access. Try again later or investigate another public page.`, { cause: error });
+    throw new PageContentTimeout(`The target website (${host}) responded${status ? ` with HTTP ${status}` : ""} but did not display readable page content within ${contentTimeoutMs / 1000} seconds on the final attempt. It may still be loading, have a script error, or restrict automated access. Try again later or investigate another public page.`, { cause: error });
   }
 
   if (partialLoad) onWarning({ url: page.url(), partialLoad: true, message: "The page is still loading. Continuing with the readable content already available; load-dependent checks may be incomplete." });

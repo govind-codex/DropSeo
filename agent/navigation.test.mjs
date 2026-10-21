@@ -13,17 +13,22 @@ test("navigation handles slow and unreachable documents in Chromium", async (t) 
   }
   if (!executablePath) return t.skip("Install Chromium or set CHROME_EXECUTABLE_PATH for browser regression coverage.");
   let retryRequests = 0;
+  let emptyRequests = 0;
+  let blankRequests = 0;
   const server = http.createServer((req, res) => {
     if (req.url === "/never" || req.url === "/stalled.js") return;
     if (req.url === "/retry" && ++retryRequests === 1) return;
     res.setHeader("Content-Type", "text/html");
     if (req.url === "/csp") res.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self'; require-trusted-types-for 'script'");
     if (req.url === "/delayed") return res.end('<body><script>window.requestAnimationFrame = () => 0; setTimeout(() => document.body.append(Object.assign(document.createElement("h1"), {textContent: "Content rendered later"})), 350);</script></body>');
-    if (req.url === "/late") return res.end('<body><script>setTimeout(() => document.body.append(Object.assign(document.createElement("h1"), {textContent: "Hydrated content"})), 5500);</script></body>');
+    if (req.url === "/late") return res.end('<body><script>setTimeout(() => document.body.append(Object.assign(document.createElement("h1"), {textContent: "Hydrated content"})), 15500);</script></body>');
+    if (req.url === "/empty-once" && ++emptyRequests === 1) return res.end("<body></body>");
+    if (req.url === "/loading") return res.end('<body>Loading...<div>Loading...</div></body>');
+    if (req.url === "/hydrating") return res.end('<body>Loading...<script>setTimeout(() => document.body.innerHTML = "<h1>Sign in</h1>", 350);</script></body>');
     if (req.url === "/denied") { res.statusCode = 403; return res.end(" "); }
     if (req.url === "/limited") { res.statusCode = 429; return res.end(" "); }
     if (req.url === "/slow") return res.end('<h1>Usable content</h1><script src="/stalled.js"></script>');
-    if (req.url === "/blank") return res.end("<html><body></body></html>");
+    if (req.url === "/blank") { blankRequests += 1; return res.end("<html><body></body></html>"); }
     if (req.url === "/error") res.statusCode = 503;
     res.end("<h1>Current document</h1>");
   });
@@ -53,9 +58,24 @@ test("navigation handles slow and unreachable documents in Chromium", async (t) 
     await navigatePage(page, `${origin}/delayed`, { ...options, contentTimeoutMs: 1_000 });
     assert.equal(await page.locator("h1").innerText(), "Content rendered later");
   }));
-  await t.test("default content budget allows hydration beyond five seconds", () => withPage(async (page) => {
+  await t.test("default content budget allows hydration beyond fifteen seconds", () => withPage(async (page) => {
     await navigatePage(page, `${origin}/late`);
     assert.equal(await page.locator("h1").innerText(), "Hydrated content");
+  }));
+  await t.test("recovers once when a successful response has an empty shell", () => withPage(async (page) => {
+    const warnings = [];
+    const result = await navigatePage(page, `${origin}/empty-once`, { ...options, onWarning: (item) => warnings.push(item) });
+    assert.equal(result.response.status(), 200);
+    assert.equal(emptyRequests, 2);
+    assert.equal(warnings.length, 1);
+    assert.equal(await page.locator("h1").innerText(), "Current document");
+  }));
+  await t.test("waits for application content beyond a loading placeholder", () => withPage(async (page) => {
+    await navigatePage(page, `${origin}/hydrating`, { ...options, contentTimeoutMs: 1_000 });
+    assert.equal(await page.locator("h1").innerText(), "Sign in");
+  }));
+  await t.test("a persistent loading screen cannot become successful evidence", () => withPage(async (page) => {
+    await assert.rejects(navigatePage(page, `${origin}/loading`, options), /did not display readable page content/);
   }));
   await t.test("access refusals identify the HTTP status instead of reporting blank content", () => withPage(async (page) => {
     await assert.rejects(navigatePage(page, `${origin}/denied`, options), /refused access.*HTTP 403/);
@@ -83,6 +103,7 @@ test("navigation handles slow and unreachable documents in Chromium", async (t) 
   }));
   await t.test("blank document does not become a successful audit", () => withPage(async (page) => {
     await assert.rejects(navigatePage(page, `${origin}/blank`, options), /did not display readable page content/);
+    assert.equal(blankRequests, 2);
   }));
   await t.test("HTTP errors remain available as audit evidence", () => withPage(async (page) => {
     const result = await navigatePage(page, `${origin}/error`, options);
