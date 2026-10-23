@@ -53,3 +53,17 @@
   .card, .footer button { transition: none; }
   .card:hover { transform: none; }
 }
+
+/* Keep evidence and actions readable on compact cards. */
+.severityPill, .category, .confidence, .header .urls, .comparisonLabel,
+.fix > div > span, .evidenceLabel, .urls strong, .footer button small { font-size: 12px; }
+.comparisonPanel p, .fix p, .card .evidence, .evidence summary { font-size: 14px; }
+.evidence summary { min-height: 44px; padding-block: 10px; }
+.footer button { min-height: 48px; }
+.footer button strong { font-size: 14px; }
+.footer button > span { min-width: 0; }
+@media (max-width: 380px) {
+  .card { padding: 16px; }
+  .header h3 { font-size: 20px; }
+  .comparisonPanel, .fix { padding: 12px; }
+}

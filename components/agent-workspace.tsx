@@ -36,7 +36,7 @@ import {
   Zap,
 } from "lucide-react";
 import { UserProfileMenu } from "@/components/ui/user-profile-menu";
-import { exportInvestigationPdf } from "@/lib/report-pdf";
+import { exportInvestigationPdf, exportSolutionsPdf } from "@/lib/report-pdf";
 type Workflow = "autonomous" | "journey" | "performance" | "verify";
 type ActivityItem = { id: string; at: string; status: "running" | "complete" | "warning" | "blocked"; title: string; detail: string };
 type Profile = { siteType: string; purpose: string; primaryJourney: string; plan: string[] };
@@ -98,7 +98,7 @@ export default function AgentWorkspace({ user, investigation, initialIntent, aut
     }
   }, [autoStart, initialIntent]);
   const [startingVerification, setStartingVerification] = useState(false);
-  const [pdfExporting, setPdfExporting] = useState(false);
+  const [pdfExporting, setPdfExporting] = useState<false | "report" | "solutions">(false);
   const [pdfError, setPdfError] = useState("");
   const [planUsage, setPlanUsage] = useState<PlanUsage | null>(null);
   const [planUsageError, setPlanUsageError] = useState("");
@@ -235,12 +235,12 @@ export default function AgentWorkspace({ user, investigation, initialIntent, aut
     if (!findingId) { setError("This finding is not part of the original investigation. Start a new investigation to check it."); return; }
     startRun(undefined, { workflow: "verify", goal: `${finding.title}. Expected behavior: ${finding.expected}`, workflowId: finding.workflowId, findingId });
   }
-  async function exportReport() {
+  async function exportReport(kind: "report" | "solutions" = "report") {
     if (!result || pdfExporting) return;
-    setPdfExporting(true);
+    setPdfExporting(kind);
     setPdfError("");
     try {
-      await exportInvestigationPdf({ result, profile, targetUrl: investigation?.url || url, investigationId, createdAt: investigation?.createdAt });
+      await (kind === "solutions" ? exportSolutionsPdf : exportInvestigationPdf)({ result, profile, targetUrl: investigation?.url || url, investigationId, createdAt: investigation?.createdAt });
     } catch (caught) {
       setPdfError(caught instanceof Error ? caught.message : "PDF could not be created. Please try again.");
     } finally {
@@ -258,7 +258,7 @@ export default function AgentWorkspace({ user, investigation, initialIntent, aut
       <a className="skip-link" href="#workspace-main">Skip to content</a>
       <main className="agent-main" id="workspace-main">
         {investigation ? <section className="saved-heading"><div><Link href="/investigations">Back to My Investigations</Link><h1>{hostnameFor(investigation.url)}</h1><p>{formatInvestigationDate(investigation.createdAt)} | {investigation.workflow} | {status}</p></div><div className="saved-actions"><Link className="run-button" href="/dashboard">New investigation <ArrowRight /></Link>{verificationEngineAvailable && result?.findings.some((finding) => finding.verificationSupported) && <button className="run-button" disabled={["running", "queued"].includes(status) || startingVerification || planUsage?.remaining === 0} onClick={() => startRun(undefined, { workflow: "verify", goal })}><RefreshCw />{startingVerification ? "Starting verification..." : "Verify supported checks"}</button>}</div></section> : <section className="mission-control">
-          <div className="mission-copy"><span className="eyebrow"><Sparkles size={13} /> AUTONOMOUS WEBSITE INTELLIGENCE</span><h1>Give the agent a website.<br /><em>Watch it find the truth.</em></h1><p>Choose a bounded investigation. Document analysis is available; interactive journeys and screenshots require a connected browser worker.</p>{planUsage && <PlanUsageCard usage={planUsage} />}{planUsageLoading && <p role="status">Loading plan allowance...</p>}{planUsageError && <div className="form-error" role="alert"><p>{planUsageError}</p><button type="button" className="text-cta" onClick={loadPlanUsage} disabled={planUsageLoading}>Retry plan usage</button></div>}</div>
+          <div className="mission-copy"><span className="eyebrow"><Sparkles size={13} /> AUTONOMOUS WEBSITE INTELLIGENCE</span><h1>Give the agent a website.{" "}<br /><em>Watch it find the truth.</em></h1><p>Choose a bounded investigation. Document analysis is available; interactive journeys and screenshots require a connected browser worker.</p>{planUsage && <PlanUsageCard usage={planUsage} />}{planUsageLoading && <p role="status">Loading plan allowance...</p>}{planUsageError && <div className="form-error" role="alert"><p>{planUsageError}</p><button type="button" className="text-cta" onClick={loadPlanUsage} disabled={planUsageLoading}>Retry plan usage</button></div>}</div>
           <form className="launcher" id="investigation-launcher" onSubmit={startRun} noValidate>
             <label htmlFor="target-url">Website to investigate</label>
             <div className="url-row"><Globe2 size={20} /><input id="target-url" value={url} onChange={(event) => { setUrl(event.target.value); setUrlError(""); }} aria-invalid={Boolean(urlError)} aria-describedby="url-error" inputMode="url" autoComplete="url" placeholder="https://your-website.com" required disabled={["running", "queued"].includes(status)} /><span>PUBLIC WEB</span></div>
@@ -278,7 +278,7 @@ export default function AgentWorkspace({ user, investigation, initialIntent, aut
           </div>
         </section>
         {result?.comparison && <section className="verification-results"><div className="results-heading"><div><span className="eyebrow">VERIFICATION COMPARISON</span><h2>Changes since the original investigation</h2><p>Verification recorded {formatInvestigationDate(result.verifiedAt || investigation?.createdAt || "")}. The original evidence is preserved.</p><Link href={`/investigations/${result.comparison.referenceId}`}>Open original investigation</Link></div></div><div className="comparison-grid">{["Fixed", "Still present", "Newly detected", "Unverified"].map((state) => <section key={state}><h3>{state} <span>{result.comparison!.issues.filter((issue) => issue.status === state).length}</span></h3>{result.comparison!.issues.filter((issue) => issue.status === state).map((issue) => <article key={issue.finding.id}><strong>{issue.finding.title}</strong><p>{issue.detail}</p></article>)}</section>)}</div></section>}
-        {(status === "completed" || findings.length > 0) && <section className="results" id="report"><div className="results-heading"><div><span className="eyebrow"><Search size={13} /> EVIDENCE-BACKED REPORT</span><h2>{result?.outcome || "Findings collected during the run"}</h2><p>{result ? `${result.visitedPages.length} pages · ${result.actions.length} evidence actions · ${(result.durationMs / 1000).toFixed(1)} seconds` : "Findings appear as they are verified."}</p></div>{result && <div className="report-export"><button className="export-button" onClick={exportReport} disabled={pdfExporting}>{pdfExporting ? <Loader2 className="spin" /> : <Download />} {pdfExporting ? "Preparing PDF…" : "Export PDF"}</button>{pdfError && <span role="alert">{pdfError}</span>}</div>}</div>
+        {(status === "completed" || findings.length > 0) && <section className="results" id="report"><div className="results-heading"><div><span className="eyebrow"><Search size={13} /> EVIDENCE-BACKED REPORT</span><h2>{result?.outcome || "Findings collected during the run"}</h2><p>{result ? `${result.visitedPages.length} pages · ${result.actions.length} evidence actions · ${(result.durationMs / 1000).toFixed(1)} seconds` : "Findings appear as they are verified."}</p></div>{result && <div className="report-export"><div className="report-export-actions"><button className="export-button" onClick={() => exportReport("report")} disabled={Boolean(pdfExporting)} aria-busy={pdfExporting === "report"}>{pdfExporting === "report" ? <Loader2 className="spin" /> : <Download />} {pdfExporting === "report" ? "Preparing PDF..." : "Export PDF"}</button><button className="export-button" onClick={() => exportReport("solutions")} disabled={Boolean(pdfExporting)} aria-busy={pdfExporting === "solutions"} aria-label="Download Solutions PDF">{pdfExporting === "solutions" ? <Loader2 className="spin" /> : <FileSearch />} {pdfExporting === "solutions" ? "Preparing solutions..." : "Solutions"}</button></div>{pdfError && <span role="alert">{pdfError}</span>}</div>}</div>
           {result && <div className="metric-grid"><Metric icon={<Gauge />} label="LCP observed" value={result.performance.vitals.lcp ? `${(result.performance.vitals.lcp / 1000).toFixed(2)}s` : "—"} /><Metric icon={<Zap />} label="Response start" value={`${(result.performance.ttfb / 1000).toFixed(2)}s`} /><Metric icon={<FileSearch />} label="Resources" value={String(result.performance.resources)} /><Metric icon={<ShieldCheck />} label="Blocked actions" value={String(result.safety.blockedActions)} /></div>}
           <div className="report-filters"><div><label htmlFor="finding-priority">Priority</label><select id="finding-priority" value={severityFilter} onChange={(event) => setSeverityFilter(event.target.value)}><option value="all">All priorities</option>{["critical", "high", "medium", "low", "info", "resolved"].map((severity) => <option key={severity}>{severity}</option>)}</select></div><div><label htmlFor="finding-confidence">Verification</label><select id="finding-confidence" value={confidenceFilter} onChange={(event) => setConfidenceFilter(event.target.value)}><option value="all">All findings</option><option value="verified">Observed checks</option><option value="hypothesis">Unverified theories</option></select></div><span role="status">{visibleFindings.length} findings shown</span></div>
           <div className={`findings-list ${findingGridStyles.grid}`}>{visibleFindings.length ? visibleFindings.map((finding) => <FindingCard finding={{ ...finding, verificationSupported: finding.verificationSupported && verificationEngineAvailable }} key={finding.id} disabled={["running", "queued"].includes(status) || startingVerification || !result || planUsage?.remaining === 0} onVerify={verifyFinding} />) : <div className="no-findings"><Check /><strong>{findings.length ? "No findings match these filters. Try another priority or verification level." : "No material issues were verified in this bounded run."}</strong></div>}</div>

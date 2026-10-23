@@ -59,7 +59,8 @@ test("PDF represents expected behaviour, evidence, theories and dated verificati
       findings: [{ category: "Accessibility", severity: "high", title: "Résumé heading", confidence: "hypothesis", expected: "One descriptive H1", observed: "Two main headings. ".repeat(800), recommendation: "Keep one H1", affectedUrls: ["https://example.com/pricing"], evidence: [{ url: "https://example.com/pricing", detail: "H1 count: 2" }] }],
       comparison: { referenceId: "original-fixture", issues: [{ finding: { title: "Résumé heading" }, status: "Unverified", detail: "No matching passing evidence" }] },
     };
-    const doc = await pdf.exportInvestigationPdf({ result, profile: null, targetUrl: result.visitedPages[0], investigationId: "saved-fixture", download: false });
+    for (const exporter of [pdf.exportInvestigationPdf, pdf.exportSolutionsPdf]) {
+    const doc = await exporter({ result, profile: null, targetUrl: result.visitedPages[0], investigationId: "saved-fixture", download: false });
     assert.ok(doc.getNumberOfPages() >= 3);
     const raw = doc.output();
     assert.ok(raw.startsWith("%PDF"));
@@ -76,6 +77,12 @@ test("PDF represents expected behaviour, evidence, theories and dated verificati
       }
     }
     assert.ok(texts.length > 100);
+    }
+    assert.match(pdf.solutionSteps(result.findings[0]).join(" "), /page outline/);
+    assert.match(pdf.solutionSteps({ ...result.findings[0], title: "Unknown defect", observed: "Custom issue" }).join(" "), /acceptance criterion/);
+    assert.match(pdf.solutionSteps({ ...result.findings[0], severity: "resolved" }).join(" "), /passing implementation/);
+    const empty = await pdf.exportSolutionsPdf({ result: { ...result, findings: [] }, profile: null, targetUrl: result.visitedPages[0], download: false });
+    assert.ok(empty.output().startsWith("%PDF"));
     await assert.rejects(() => pdf.exportInvestigationPdf({ result: { ...result, outcome: "Unsupported emoji 🦊" }, profile: null, targetUrl: result.visitedPages[0], download: false }), /cannot display/);
   } finally { globalThis.fetch = previousFetch; }
 });

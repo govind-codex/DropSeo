@@ -106,3 +106,75 @@ h1,h2,h3,p,a,strong,small{overflow-wrap:anywhere}
 @media(max-width:600px){.landing-hero .start-form{padding:20px;border-radius:17px}.start-fields{grid-template-columns:1fr;gap:16px}.start-card-footer{flex-direction:column;gap:12px}.start-form .start-fields .google-button{white-space:normal}.start-form .start-field input,.start-form .start-field select{font-size:16px}}
 @media(min-width:901px){.start-fields:has(.start-task-field)>.start-field:nth-child(2){grid-column:2/-1}.start-fields .start-task-field{grid-column:1/3}.start-fields:has(.start-task-field) .google-button{grid-column:3;grid-row:2}}
 @media(min-width:601px) and (max-width:900px){.start-fields .start-task-field{grid-column:1/-1}}
+
+.report-export-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}.report-export-actions .export-button{white-space:nowrap}.report-export-actions .export-button:focus-visible{outline:3px solid #087c68;outline-offset:3px}.report-export-actions .export-button:disabled{opacity:.65;transform:none}
+@media(max-width:640px){.report-export{width:100%;justify-items:start}.report-export-actions{justify-content:flex-start}.report-export>span{text-align:left;max-width:100%}}
+/* Responsive sizing shared by the workspace, reports and account pages. */
+html { scroll-padding-top: 96px; }
+:where(input, select, textarea) { max-width: 100%; }
+:where(.mission-control, .workspace-grid, .workflow-grid, .metric-grid, .results-heading, .start-card-footer, .launch-footer) > * { min-width: 0; }
+.topbar { height: auto; min-height: 72px; padding-block: 12px; }
+.agent-main { width: 100%; }
+.workflow-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.workflow-card > span { min-width: 0; }
+.workflow-card strong, .launcher > label, .launcher legend { font-size: 14px; }
+.workflow-card small, .limits span, .plan-list li, .site-profile p, .guardrails strong { font-size: 12px; line-height: 1.6; }
+.goal-field textarea, .url-row input { font-size: 16px; }
+.goal-field textarea { min-height: 96px; }
+.url-row > svg, .agent-error > svg, .metric > span, .history-icon { flex-shrink: 0; }
+.run-button, .export-button { min-height: 44px; font-size: 14px; }
+.launch-footer .run-button { flex-shrink: 0; }
+.plan-usage-heading small, .plan-usage p, .plan-usage a, .plan-current, .metric small, .agent-footer, .report-export > span { font-size: 12px; line-height: 1.5; }
+.metric-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.metric { min-width: 0; }
+.metric > div { min-width: 0; overflow-wrap: anywhere; }
+.metric strong { font-size: clamp(16px, 1.5vw, 20px); }
+.eyebrow { flex-wrap: wrap; line-height: 1.5; }
+.workspace-bar > div:first-child { min-width: 0; flex-wrap: wrap; }
+.workspace-bar strong { font-size: 14px; }
+.browser-chrome { min-height: 40px; height: auto; padding-block: 8px; }
+.browser-chrome .address { font-size: 12px; }
+.evidence-footer { height: auto; min-height: 40px; flex-wrap: wrap; gap: 8px; padding-block: 8px; font-size: 12px; }
+.evidence-footer span { min-width: 0; overflow-wrap: anywhere; }
+.activity-feed article > div, .plan-usage-heading > div { min-width: 0; }
+.activity-feed p, .site-profile p, .plan-list li, .connection-notice { overflow-wrap: anywhere; }
+.results-heading { flex-wrap: wrap; align-items: flex-start; }
+.results-heading > div:first-child { flex: 1 1 360px; }
+.results-heading .report-export { flex: 0 1 auto; }
+.report-export-actions { max-width: 100%; }
+.report-export-actions .export-button { white-space: normal; text-align: center; justify-content: center; }
+.report-filters > div { flex: 1 1 180px; min-width: 0; max-width: 280px; }
+.agent-error { overflow-wrap: anywhere; }
+.trust-links a, .history-nav { min-height: 44px; display: inline-flex; align-items: center; }
+.saved-run-link > *, .comparison-grid > section { min-width: 0; overflow-wrap: anywhere; }
+.comparison-grid h3 { flex-wrap: wrap; gap: 8px; }
+.investigation-row > svg { flex-shrink: 0; }
+@media (max-width: 1100px) {
+  .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .workspace-grid { grid-template-columns: 220px minmax(0, 1fr); }
+}
+@media (max-width: 720px) {
+  .topbar { min-height: 64px; }
+  .workflow-grid, .workspace-grid { grid-template-columns: minmax(0, 1fr); }
+  .results-heading > div:first-child { flex-basis: auto; }
+  .report-export { width: 100%; justify-items: stretch; }
+  .report-export-actions { justify-content: flex-start; }
+  .report-export-actions .export-button { flex: 1 1 130px; }
+  .results-heading h2 { font-size: clamp(21px, 5vw, 26px); }
+  .report-filters > div { max-width: none; }
+  .agent-main { padding-inline: clamp(12px, 4vw, 24px); }
+  .landing-hero .start-form .start-field input, .landing-hero .start-form .start-field select { font-size: 16px; }
+}
+@media (max-width: 380px) {
+  .metric { padding: 12px; gap: 8px; flex-wrap: wrap; }
+  .launcher { padding: 14px; }
+  .browser-panel { padding: 8px; }
+  .plan-usage-heading { flex-wrap: wrap; gap: 8px; }
+  .plan-usage-heading strong { text-align: left; }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  .topbar { position: relative; }
+}
+.agent-footer { flex-wrap: wrap; gap: 16px 24px; }
+.agent-footer > span { flex-shrink: 0; }
+.agent-footer-logo { flex-shrink: 0; }

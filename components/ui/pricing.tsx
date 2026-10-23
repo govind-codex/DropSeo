@@ -36,7 +36,7 @@ export function Pricing({
   title = "Simple, transparent pricing",
   description = "Choose the plan that works for you.\nEvery plan includes evidence-backed investigations and safe, bounded exploration.",
 }: PricingProps) {
-  const isDesktop = useMediaQuery("(min-width: 768px)")
+  const isDesktop = useMediaQuery("(min-width: 1024px)")
   const prefersReducedMotion = useReducedMotion()
 
   return (
@@ -58,7 +58,7 @@ export function Pricing({
           </p>
         </LandingReveal>
 
-        <div className="grid grid-cols-1 items-stretch gap-5 md:grid-cols-3">
+        <div className="grid grid-cols-1 items-stretch gap-5 lg:grid-cols-3">
           {plans.map((plan, index) => (
             <LandingReveal key={plan.id} delay={index * 0.09} className="h-full">
             <motion.article

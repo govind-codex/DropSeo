@@ -40,7 +40,7 @@ export default function Navbar() {
       <div className="mx-auto flex h-full max-w-[1280px] items-center justify-between px-5 sm:px-8 lg:px-10">
         <div className="flex items-center gap-8 lg:gap-12">
           <Logo />
-          <NavMenu className="hidden md:flex" />
+          <NavMenu className="hidden lg:flex" />
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
@@ -50,7 +50,7 @@ export default function Navbar() {
           <Button className="hidden bg-[#087c68] text-white shadow-[0_7px_18px_rgba(8,124,104,0.2)] hover:-translate-y-0.5 hover:bg-[#066d5b] hover:shadow-[0_10px_24px_rgba(8,124,104,0.28)] sm:inline-flex" asChild>
             <a href="#hero-url">Investigate website <ArrowRight aria-hidden="true" /></a>
           </Button>
-          <div className="md:hidden">
+          <div className="lg:hidden">
             <NavigationSheet />
           </div>
         </div>

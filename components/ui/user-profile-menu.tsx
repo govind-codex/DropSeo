@@ -53,7 +53,7 @@ export function UserProfileMenu({ user, className }: UserProfileMenuProps) {
     <div ref={rootRef} className={cn("relative shrink-0", className)}>
       <button
         ref={triggerRef}
-        className="group flex items-center gap-1.5 rounded-full border border-[#a9d4c5] bg-linear-to-br from-white via-[#f4fbf8] to-[#e5f5ef] p-1 pr-2 text-[#236454] shadow-[0_5px_18px_rgba(8,124,104,0.16)] transition-[border-color,box-shadow,transform] hover:-translate-y-0.5 hover:border-[#66b9a3] hover:shadow-[0_9px_25px_rgba(8,124,104,0.24)]"
+        className="group flex min-h-11 items-center gap-1.5 rounded-full border border-[#a9d4c5] bg-linear-to-br from-white via-[#f4fbf8] to-[#e5f5ef] p-1 pr-2 text-[#236454] shadow-[0_5px_18px_rgba(8,124,104,0.16)] transition-[border-color,box-shadow,transform] hover:-translate-y-0.5 hover:border-[#66b9a3] hover:shadow-[0_9px_25px_rgba(8,124,104,0.24)]"
         type="button"
         aria-label="Open profile menu"
         aria-expanded={open}
@@ -69,7 +69,7 @@ export function UserProfileMenu({ user, className }: UserProfileMenuProps) {
         {open && (
           <motion.aside
             id={menuId}
-            className="absolute right-0 top-[calc(100%+10px)] z-60 w-[min(19rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-[#badbce] bg-linear-to-b from-[#f5fcf9] via-white to-white p-2 text-[#294742] shadow-[0_24px_70px_rgba(8,87,73,0.24)]"
+            className="absolute right-0 top-[calc(100%+10px)] z-60 w-[min(19rem,calc(100vw-2rem))] max-h-[calc(100dvh-6rem)] overflow-y-auto rounded-2xl border border-[#badbce] bg-linear-to-b from-[#f5fcf9] via-white to-white p-2 text-[#294742] shadow-[0_24px_70px_rgba(8,87,73,0.24)]"
 
             aria-label="User profile menu"
             initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -14, scaleY: 0.94 }}
@@ -120,7 +120,7 @@ export function UserProfileMenu({ user, className }: UserProfileMenuProps) {
                     transition={{ delay: reduceMotion ? 0 : 0.08 + index * 0.045 }}
                   >
                     <Link
-                      className="group flex items-center rounded-xl px-2.5 py-2 text-sm font-medium text-[#49655d] transition-[color,background-color,transform] hover:translate-x-0.5 hover:bg-[#edf8f4] hover:text-[#087c68] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#6bd0bb]"
+                      className="group flex min-h-11 items-center rounded-xl px-2.5 py-2 text-sm font-medium text-[#49655d] transition-[color,background-color,transform] hover:translate-x-0.5 hover:bg-[#edf8f4] hover:text-[#087c68] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#6bd0bb]"
                       href={item.href}
 
                       onClick={() => setOpen(false)}

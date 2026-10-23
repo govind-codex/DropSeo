@@ -28,7 +28,7 @@ export function NavigationSheet() {
           <Menu aria-hidden="true" />
         </Button>
       </SheetTrigger>
-      <SheetContent className="border-[#dce8e3] bg-[#f9fcfa] p-0" side="right">
+      <SheetContent className="border-[#dce8e3] bg-[#f9fcfa] w-[min(22rem,calc(100vw-1rem))] overflow-y-auto p-0 [&>button]:size-11 [&>button]:grid [&>button]:place-items-center" side="right">
         <SheetHeader className="border-b border-[#e2ebe7] px-6 py-5 text-left">
           <SheetTitle><Logo /></SheetTitle>
           <SheetDescription>Website intelligence, backed by evidence.</SheetDescription>
@@ -50,9 +50,9 @@ export function NavigationSheet() {
           <Button className="border-[#c9ddd5] bg-white text-[#1f5147] hover:bg-[#edf7f3]" variant="outline" asChild>
             <a href="/api/auth/google" target="_top">Sign in</a>
           </Button>
-          <Button className="bg-[#087c68] text-white shadow-sm hover:bg-[#066d5b]" asChild>
+          <SheetClose asChild><Button className="bg-[#087c68] text-white shadow-sm hover:bg-[#066d5b]" asChild>
             <a href="#hero-url">Investigate website <ArrowRight aria-hidden="true" /></a>
-          </Button>
+          </Button></SheetClose>
         </div>
       </SheetContent>
     </Sheet>
