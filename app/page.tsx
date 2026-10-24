@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, Bot, Check, FileSearch, Gauge, Globe2, Route, ShieldCheck, Sparkles } from "lucide-react";
 import { HalftoneHeadline } from "@/components/ui/halftone-headline";
+import { VariableProximity } from "@/components/ui/variable-proximity";
 import { InvestigationStart } from "@/components/investigation-start";
 import { LandscapeFooter } from "@/components/landscape-footer";
 import { LandingReveal } from "@/components/landing-reveal";
@@ -62,9 +63,9 @@ export default async function LandingPage() {
       <main id="main">
         <section className="landing-hero">
           <LandingReveal className="hero-copy" variant="hero" onLoad>
-            <span className="landing-eyebrow"><Sparkles size={15} /> AI WEBSITE INVESTIGATOR</span>
-            <HalftoneHeadline lines={["Website friction, handled.", "Save hours every week."]} />
-            <p>AudiFox explores real visitor journeys, finds what gets in the way, and brings back clear evidence so you know exactly what to fix.</p>
+            <span className="landing-eyebrow"><Sparkles size={15} /> AI WEBSITE CHECKER</span>
+            <HalftoneHeadline lines={["Find what’s wrong.", "Know what to fix."]} />
+            <VariableProximity text="AudiFox checks your website for problems and gives you a clear report with simple steps to fix them." />
             <InvestigationStart authenticated={Boolean(user)} />
             <div className="hero-benefits" aria-label="AudiFox benefits"><span><Check size={15} /> Evidence-backed</span><span><Check size={15} /> Safe by default</span><span><Check size={15} /> Built for any public site</span></div>
           </LandingReveal>
@@ -89,14 +90,14 @@ export default async function LandingPage() {
             <LandingReveal delay={0.18}><article><span className="capability-icon"><ShieldCheck /></span><h3>Verify your fixes</h3><p>Revisit a reported problem and check that the behavior has improved.</p></article></LandingReveal>
           </div>
         </section>
-        <section className="sample-proof"><LandingReveal><span className="landing-eyebrow">SEE THE OUTPUT</span><h2>Evidence you can turn into a fix.</h2><p>Explore a clearly labeled example with an affected URL, observed behaviour, supporting evidence and recommended next action.</p><Link className="text-cta" href="/sample-report">View sample report <ArrowRight size={18} /></Link></LandingReveal></section>
+        <section className="sample-proof"><LandingReveal><span className="landing-eyebrow">SEE THE OUTPUT</span><h2>Evidence you can turn into a fix.</h2><p>Explore a clearly labeled example with an affected URL, observed behaviour, supporting evidence and recommended next action.</p><a className="text-cta" href="/reports/audifox-sample-report.pdf" download="audifox-sample-report.pdf" aria-label="Download sample report PDF">View sample report <ArrowRight size={18} aria-hidden="true" /></a></LandingReveal></section>
         <Pricing
           plans={pricingPlans}
           authenticated={Boolean(user)}
           title="Start small. Investigate deeper when you need to."
           description="Every plan includes evidence, supported verification and PDF exports, within its page and time limits."
         />
-        <p className="pricing-rules">Allowances reset on the first of each month at 00:00 UTC. Each accepted investigation or verification, including queued runs, uses one allowance. Failures after acceptance still count. Requests rejected before acceptance release their reservation. Unused allowances do not roll over. Studio currently provides higher individual limits; shared seats and queue priority are not offered.</p>
+        <div className="pricing-rules-container"><p className="pricing-rules">Limits reset on the 1st of each month (UTC). Each accepted run uses one credit, even if it fails. Rejected requests don’t count. Unused credits don’t carry over. All plans are for individual use.</p></div>
         <section className="landing-how" id="how-it-works" aria-labelledby="how-heading"><LandingReveal><span className="landing-eyebrow">FROM URL TO INSIGHT</span><h2 id="how-heading">Your next investigation<br />is three steps away.</h2><a href={user ? "/dashboard" : "/api/auth/google"} className="text-cta" target={user ? undefined : "_top"}>Open your workspace <ArrowRight size={18} /></a></LandingReveal><LandingReveal delay={0.1}><ol><li><span>1</span><div><h3>Enter your website and goal</h3><p>Choose what you want to learn.</p></div></li><li><span>2</span><div><h3>Sign in and investigate</h3><p>Your website and goal continue into your workspace.</p></div></li><li><span>3</span><div><h3>Turn findings into fixes</h3><p>Follow the investigation and review the evidence.</p></div></li></ol></LandingReveal></section>
       </main>
       <LandscapeFooter />

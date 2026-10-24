@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { intentDestination, validateWebsiteUrl } from "@/lib/investigation-intent";
 
@@ -41,7 +40,7 @@ export function InvestigationStart({ authenticated }: { authenticated: boolean }
     <p id="start-error" role="alert" className="form-error">{error}</p>
     <div className="start-card-footer">
     <p id="start-help">{authenticated ? "Continue in your workspace." : "Choose your goal, then sign in with Google. Your inputs stay with you."}</p>
-    <Link className="text-cta" href="/sample-report">View sample report <ArrowRight size={16} aria-hidden="true" /></Link>
+    <a className="text-cta" href="/reports/audifox-sample-report.pdf" download="audifox-sample-report.pdf" aria-label="Download sample report PDF">Sample Report <ArrowRight size={16} aria-hidden="true" /></a>
     </div>
   </form>;
 }
